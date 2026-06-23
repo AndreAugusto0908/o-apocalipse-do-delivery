@@ -1,39 +1,127 @@
 class CheckoutService {
-  constructor(gatewayPagamento, pedidoRepository, emailService) {
-    this.gatewayPagamento = gatewayPagamento;
-    this.pedidoRepository = pedidoRepository;
-    this.emailService = emailService; // Dependência externa para e-mail
+  constructor(dependencies, options = {}) {
+    this.gatewayPagamento = dependencies.gatewayPagamento;
+    this.pedidoRepository = dependencies.pedidoRepository;
+    this.emailService = dependencies.emailService;
+    this.timeoutMs = options.timeoutMs ?? 2000;
+    this.maxRetries = options.maxRetries ?? 3;
+    this.retryDelayMs = options.retryDelayMs ?? 500;
+    this.circuitBreaker = options.circuitBreaker;
+    this.resultadoPagamentoHandlers = criarResultadoPagamentoHandlers(this);
   }
 
   async processar(pedido) {
+    if (this.gatewayIndisponivel()) {
+      return this.registrarErroGateway(pedido);
+    }
+
+    const resposta = await this.cobrarComResiliencia(pedido);
+
+    if (!resposta) {
+      return this.registrarErroGateway(pedido);
+    }
+
     try {
-      // 1. Tenta a cobrança chamando o gateway bancário externo
-      const resposta = await this.gatewayPagamento.cobrar(pedido.valor, pedido.cartao);
-      
-      if (resposta.status === 'APROVADO') {
-        pedido.status = 'PROCESSADO';
-        const pedidoSalvo = await this.pedidoRepository.salvar(pedido);
-        
-        // PROBLEMA: Disparo de e-mail síncrono acoplado ao fluxo principal
-        await this.emailService.enviarConfirmacao(pedido.clienteEmail, "Pagamento Aprovado");
-        
-        return pedidoSalvo;
-      } else {
-        // 2. Caminho infeliz: Falha de negócio (Ex: Cartão Recusado)
-        pedido.status = 'FALHOU';
-        await this.pedidoRepository.salvar(pedido);
-        return null;
-      }
+      return await this.processarResultadoPagamento(pedido, resposta);
     } catch (error) {
-      // 3. Caminho infeliz: Falha de infraestrutura (Ex: Timeout da API externa)
-      console.error("Falha catastrófica no gateway bancário:", error.message);
-      pedido.status = 'ERRO_GATEWAY';
-      await this.pedidoRepository.salvar(pedido);
-      
-      // Reparem como o código atual falha de forma bruta sem tentar retries ou fallbacks
-      return null;
+      console.error('Falha ao persistir ou finalizar pedido:', error.message);
+      return this.registrarErroGateway(pedido);
     }
   }
+
+  gatewayIndisponivel() {
+    return this.circuitBreaker?.isOpen?.();
+  }
+
+  processarResultadoPagamento(pedido, resposta) {
+    return this.obterHandlerResultadoPagamento(resposta).processar(pedido);
+  }
+
+  obterHandlerResultadoPagamento(resposta) {
+    return this.resultadoPagamentoHandlers[resposta.status] ?? this.resultadoPagamentoHandlers.RECUSADO;
+  }
+
+  async cobrarComResiliencia(pedido) {
+    const totalTentativas = this.maxRetries + 1;
+
+    for (let tentativa = 1; tentativa <= totalTentativas; tentativa += 1) {
+      try {
+        return await this.comTimeout(
+          this.gatewayPagamento.cobrar(pedido.valor, pedido.cartao)
+        );
+      } catch (error) {
+        console.error('Falha no gateway de pagamento:', error.message);
+
+        if (tentativa === totalTentativas) {
+          return null;
+        }
+
+        await this.esperar(this.retryDelayMs);
+      }
+    }
+
+    return null;
+  }
+
+  comTimeout(operacao) {
+    let timeoutId;
+
+    const timeout = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error('TIMEOUT_GATEWAY'));
+      }, this.timeoutMs);
+    });
+
+    return Promise.race([operacao, timeout]).finally(() => clearTimeout(timeoutId));
+  }
+
+  esperar(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  enviarConfirmacaoSemBloquear(email) {
+    this.emailService
+      .enviarConfirmacao(email, 'Pagamento Aprovado')
+      .catch((error) => console.error('Falha ao enviar e-mail de confirmacao:', error.message));
+  }
+
+  async registrarErroGateway(pedido) {
+    pedido.status = 'ERRO_GATEWAY';
+    await this.pedidoRepository.salvar(pedido);
+    return null;
+  }
 }
+
+class PagamentoAprovadoHandler {
+  constructor(checkoutService) {
+    this.checkoutService = checkoutService;
+  }
+
+  async processar(pedido) {
+    pedido.status = 'PROCESSADO';
+    const pedidoSalvo = await this.checkoutService.pedidoRepository.salvar(pedido);
+
+    this.checkoutService.enviarConfirmacaoSemBloquear(pedido.clienteEmail);
+
+    return pedidoSalvo;
+  }
+}
+
+class PagamentoRecusadoHandler {
+  constructor(checkoutService) {
+    this.checkoutService = checkoutService;
+  }
+
+  async processar(pedido) {
+    pedido.status = 'FALHOU';
+    await this.checkoutService.pedidoRepository.salvar(pedido);
+    return null;
+  }
+}
+
+const criarResultadoPagamentoHandlers = (checkoutService) => ({
+  APROVADO: new PagamentoAprovadoHandler(checkoutService),
+  RECUSADO: new PagamentoRecusadoHandler(checkoutService)
+});
 
 module.exports = { CheckoutService };

@@ -1,57 +1,112 @@
 const express = require('express');
 const { CheckoutService } = require('./services/CheckoutService');
 
-const app = express();
-app.use(express.json());
-
-// Mocks simulados de infraestrutura para o servidor rodar localmente antes do Toxiproxy
-const gatewayPagamentoMock = {
-  cobrar: async (valor) => {
-    // Simula o tempo de resposta padrão de uma API de terceiros (I/O Bound)
-    return new Promise(resolve => setTimeout(() => resolve({ status: 'APROVADO' }), 300));
-  }
-};
-
-const pedidoRepositoryMock = {
-  salvar: async (pedido) => {
-    // Simula a escrita no banco de dados
-    return { ...pedido, id: Math.floor(Math.random() * 10000) };
-  }
-};
-
-const emailServiceMock = {
-  enviarConfirmacao: async (email, msg) => console.log(`E-mail enviado para ${email}`)
-};
-
-// Instanciação do serviço legado
-const checkoutService = new CheckoutService(gatewayPagamentoMock, pedidoRepositoryMock, emailServiceMock);
-
-// ENDPOINT CRÍTICO: Rota que receberá a carga massiva da Black Friday
-app.post('/api/v1/checkout', async (req, res) => {
-  const { clienteEmail, valor, cartao } = req.body;
-  
-  if (!clienteEmail || !valor || !cartao) {
-    return res.status(400).json({ erro: 'Dados incompletos para checkout' });
-  }
-
-  const pedido = { clienteEmail, valor, cartao, status: 'PENDENTE' };
-  
-  // Executa o checkout
-  const resultado = await checkoutService.processar(pedido);
-
-  if (resultado && resultado.status === 'PROCESSADO') {
-    return res.status(200).json({ mensagem: 'Pedido finalizado com sucesso!', pedido: resultado });
-  }
-  
-  return res.status(500).json({ erro: 'Não foi possível processar seu pagamento. Tente mais tarde.' });
+const criarGatewayPagamentoMock = () => ({
+  cobrar: async () => new Promise((resolve) => {
+    setTimeout(() => resolve({ status: 'APROVADO' }), 300);
+  })
 });
 
-// Endpoint auxiliar para simular o comportamento de Thundering Herd (Manada Estourada)
-// Útil para limpar o cache de sessões/cupons de desconto de forma abrupta sob carga
-app.post('/api/v1/cache/flush', (req, res) => {
-  console.log("💥 CACHE LIMPO ABRUPTAMENTE!");
-  res.json({ status: 'cache_invalidated' });
+const criarPedidoRepositoryMock = () => ({
+  salvar: async (pedido) => ({ ...pedido, id: Math.floor(Math.random() * 10000) })
 });
 
-const PORT = 3000;
-app.listen(PORT, () => console.log(`🚀 Servidor da EntregasJá rodando na porta ${PORT}`));
+const criarEmailServiceMock = () => ({
+  enviarConfirmacao: async (email) => console.log(`E-mail enviado para ${email}`)
+});
+
+const criarCheckoutServicePadrao = () => new CheckoutService({
+  gatewayPagamento: criarGatewayPagamentoMock(),
+  pedidoRepository: criarPedidoRepositoryMock(),
+  emailService: criarEmailServiceMock()
+});
+
+const cartaoValido = (cartao) => (
+  cartao
+  && typeof cartao === 'object'
+  && Boolean(cartao.numero)
+  && Boolean(cartao.validade)
+  && Boolean(cartao.cvv)
+);
+
+const pedidoValido = ({ clienteEmail, valor, cartao }) => (
+  typeof clienteEmail === 'string'
+  && clienteEmail.includes('@')
+  && Number.isFinite(valor)
+  && valor > 0
+  && cartaoValido(cartao)
+);
+
+const criarPedidoCheckout = ({ clienteEmail, valor, cartao }) => ({
+  clienteEmail,
+  valor,
+  cartao,
+  status: 'PENDENTE'
+});
+
+const checkoutProcessado = (resultado) => resultado?.status === 'PROCESSADO';
+
+const respostaCheckoutProcessado = (res, pedido) => res.status(200).json({
+  mensagem: 'Pedido finalizado com sucesso!',
+  pedido
+});
+
+const respostaCheckoutNaoProcessado = (res) => res.status(500).json({
+  erro: 'Nao foi possivel processar seu pagamento. Tente mais tarde.'
+});
+
+const responderResultadoCheckout = (res, resultado) => {
+  if (checkoutProcessado(resultado)) {
+    return respostaCheckoutProcessado(res, resultado);
+  }
+
+  return respostaCheckoutNaoProcessado(res);
+};
+
+const registrarRotasCheckout = (app, checkoutService) => {
+  app.post('/api/v1/checkout', async (req, res) => {
+    if (!pedidoValido(req.body)) {
+      return res.status(400).json({ erro: 'Dados incompletos para checkout' });
+    }
+
+    const pedido = criarPedidoCheckout(req.body);
+    const resultado = await checkoutService.processar(pedido);
+
+    return responderResultadoCheckout(res, resultado);
+  });
+};
+
+const registrarRotasOperacionais = (app) => {
+  app.post('/api/v1/cache/flush', (req, res) => {
+    console.log('CACHE LIMPO ABRUPTAMENTE!');
+    res.json({ status: 'cache_invalidated' });
+  });
+};
+
+const createApp = ({ checkoutService = criarCheckoutServicePadrao() } = {}) => {
+  const app = express();
+  app.use(express.json());
+
+  registrarRotasCheckout(app, checkoutService);
+  registrarRotasOperacionais(app);
+
+  return app;
+};
+
+const startServer = (port = 3000) => {
+  const app = createApp();
+  return app.listen(port, () => {
+    console.log(`Servidor da EntregasJa rodando na porta ${port}`);
+  });
+};
+
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = {
+  createApp,
+  startServer,
+  pedidoValido,
+  cartaoValido
+};
