@@ -6,6 +6,8 @@ class CheckoutService {
     this.timeoutMs = options.timeoutMs ?? 2000;
     this.maxRetries = options.maxRetries ?? 3;
     this.retryDelayMs = options.retryDelayMs ?? 500;
+    this.jitterRatio = options.jitterRatio ?? 0.2;
+    this.random = options.random ?? Math.random;
     this.circuitBreaker = options.circuitBreaker;
     this.resultadoPagamentoHandlers = criarResultadoPagamentoHandlers(this);
   }
@@ -56,7 +58,7 @@ class CheckoutService {
           return null;
         }
 
-        await this.esperar(this.retryDelayMs);
+        await this.esperar(this.calcularBackoffComJitter(tentativa));
       }
     }
 
@@ -73,6 +75,14 @@ class CheckoutService {
     });
 
     return Promise.race([operacao, timeout]).finally(() => clearTimeout(timeoutId));
+  }
+
+  calcularBackoffComJitter(tentativa) {
+    const backoffExponencial = this.retryDelayMs * (2 ** (tentativa - 1));
+    const variacaoMaxima = backoffExponencial * this.jitterRatio;
+    const jitter = this.random() * variacaoMaxima;
+
+    return Math.round(backoffExponencial + jitter);
   }
 
   esperar(ms) {
@@ -125,3 +135,4 @@ const criarResultadoPagamentoHandlers = (checkoutService) => ({
 });
 
 module.exports = { CheckoutService };
+

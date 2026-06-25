@@ -190,3 +190,41 @@ Ambos os testes foram executados contra `http://localhost:3000`.
 | Estresse Black Friday | Aprovado | 317.84 ms | 0.00% | 0.00% |
 
 Com isso, a aplicacao ficou abaixo do limite de latencia p95 de 5 segundos e abaixo do limite de erro de 5% nos dois cenarios.
+
+### Injecao de falhas - Thundering Herd
+
+Foi adicionado o cenario `tests/performance/thundering-herd-cache-flush.js` para simular o desastre de **Thundering Herd** apos invalidacao abrupta de cache.
+
+O fluxo do teste e:
+
+1. executar `POST /api/v1/cache/flush`;
+2. disparar 10.000 requisicoes simultaneas de checkout por padrao;
+3. validar se a aplicacao respeita os SLOs de p95 menor que 5 segundos e erro menor que 5%.
+
+Comando:
+
+```bash
+npm run perf:herd
+```
+
+Para rodadas locais menores:
+
+```powershell
+npm run perf:herd:local
+```
+
+A protecao contra sobrecarga foi reforcada no `CheckoutService` com **backoff exponencial com jitter**, evitando que retentativas de gateway voltem todas ao mesmo tempo apos uma falha ou flush de cache.
+
+
+
+Evidencia local reduzida do cenario Thundering Herd:
+
+```text
+k6 run -e HERD_VUS=10 tests/performance/thundering-herd-cache-flush.js
+p95 = 331.92 ms
+http_req_failed = 0.00%
+checkout_errors = 0.00%
+cache_flush_errors = 0.00%
+```
+
+O script oficial permanece configurado para 10.000 VUs por padrao em `npm run perf:herd`; a execucao reduzida serve apenas para validar sintaxe e fluxo em maquina local.

@@ -329,3 +329,44 @@ describe('CheckoutService - limpeza de recursos de timeout', () => {
     expect(clearTimeout).toHaveBeenCalled();
   });
 });
+
+describe('CheckoutService - backoff e jitter contra Thundering Herd', () => {
+  beforeEach(() => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('calcula backoff exponencial com jitter deterministico', () => {
+    const { service } = montarCheckout({
+      options: {
+        retryDelayMs: 500,
+        jitterRatio: 0.2,
+        random: () => 0.5
+      }
+    });
+
+    expect(service.calcularBackoffComJitter(1)).toBe(550);
+    expect(service.calcularBackoffComJitter(2)).toBe(1100);
+    expect(service.calcularBackoffComJitter(3)).toBe(2200);
+  });
+
+  test('usa backoff com jitter entre tentativas de gateway', async () => {
+    const { service } = montarCheckout({
+      gatewayPagamento: GatewayPagamentoStub.aprovaAposErroTransitorio(),
+      options: {
+        retryDelayMs: 10,
+        jitterRatio: 0.5,
+        random: () => 1
+      }
+    });
+    jest.spyOn(service, 'esperar').mockResolvedValue(undefined);
+
+    await service.processar(PedidoMother.valido());
+
+    expect(service.esperar).toHaveBeenCalledWith(15);
+  });
+});
+
