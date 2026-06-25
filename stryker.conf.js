@@ -5,8 +5,7 @@ module.exports = {
   packageManager: 'npm',
   testRunner: 'jest',
   mutate: [
-    'src/**/*.js',
-    '!src/**/*.test.js'
+    'src/**/*.js'
   ],
   reporters: ['clear-text', 'progress', 'html'],
   coverageAnalysis: 'perTest',

@@ -258,3 +258,24 @@ p95 = 2.14 s
 http_req_failed = 0.00%
 gateway_slow_errors = 0.00%
 ```
+
+## Organizacao dos testes automatizados
+
+A pasta `tests/` centraliza os testes por objetivo para facilitar a leitura da entrega e evidenciar cada parte do trabalho:
+
+| Arquivo | Objetivo |
+| :--- | :--- |
+| `tests/unit/services/CheckoutService.business.test.js` | Fluxos principais de negocio: pagamento aprovado, persistencia e e-mail; pagamento recusado sem confirmacao |
+| `tests/unit/services/CheckoutService.resilience.test.js` | Resiliencia e caos: retry, timeout, fallback, circuit breaker, backoff exponencial e jitter |
+| `tests/unit/services/CheckoutService.mutation.test.js` | Contratos adicionais criados para eliminar mutantes sobreviventes no Stryker |
+| `tests/support/CheckoutServiceTestSupport.js` | Builders, Object Mothers, Stubs, Mocks e factory `montarCheckout` compartilhados pelos testes |
+| `tests/integration/http/server.checkout.test.js` | Contrato principal da rota `POST /api/v1/checkout`: validacao de payload e resposta de sucesso |
+| `tests/integration/http/server.mutation.test.js` | Contratos adicionais da camada HTTP usados para eliminar mutantes sobreviventes |
+| `tests/integration/http/server.operational.test.js` | Rotas operacionais e bootstrap HTTP da aplicacao |
+| `tests/integration/http/server.gateway-slow.test.js` | Configuracoes do desastre Gateway Lento e latencia simulada de 5000 ms |
+| `tests/support/ServerTestSupport.js` | Builder, Object Mother e mocks compartilhados pelos testes HTTP |
+
+Essa separacao deixa claro quais testes provam regra de negocio, quais provam resiliencia/SRE, quais validam a camada HTTP e quais existem especificamente para fortalecer a suite contra teste de mutacao.
+
+
+
