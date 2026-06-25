@@ -135,3 +135,58 @@ server.js            | 100.00 mutation score
 Com isso, a suite supera a meta obrigatoria de Mutation Score minimo de 80% e terminou com 0 mutantes sobreviventes.
 
 
+
+## Fase 4 - Engenharia do Caos e Testes de Desempenho
+
+A fase de desempenho foi implementada com **k6**, simulando um ambiente de homologacao local para o endpoint `POST /api/v1/checkout`. Os scripts usam perfis de volumetria inspirados em Black Friday, com ramp-up, periodo steady e ramp-down.
+
+| Script | Objetivo | Perfil de carga |
+| :--- | :--- | :--- |
+| `tests/performance/black-friday-load.js` | Teste de carga nominal | ramp-up ate 25 VUs, steady de 1 minuto e ramp-down |
+| `tests/performance/black-friday-stress.js` | Teste de estresse progressivo | ramp-up progressivo ate 100 VUs e ramp-down |
+
+### SLI/SLO definidos
+
+| Indicador | Metrica k6 | SLO obrigatorio |
+| :--- | :--- | :--- |
+| Latencia p95 | `http_req_duration` | menor que 5 segundos |
+| Taxa de erro HTTP | `http_req_failed` | menor que 5% |
+| Taxa de erro funcional | `checkout_errors` | menor que 5% |
+
+Os thresholds ficam versionados nos proprios scripts k6:
+
+```javascript
+thresholds: {
+  http_req_duration: ['p(95)<5000'],
+  http_req_failed: ['rate<0.05'],
+  checkout_errors: ['rate<0.05']
+}
+```
+
+### Como executar
+
+Subir a aplicacao:
+
+```bash
+npm start
+```
+
+Executar os cenarios:
+
+```bash
+npm run perf:load
+npm run perf:stress
+```
+
+Tambem e possivel apontar para outro ambiente usando `BASE_URL`.
+
+### Evidencias de execucao local
+
+Ambos os testes foram executados contra `http://localhost:3000`.
+
+| Cenario | Resultado | p95 de latencia | Taxa de erro HTTP | Taxa de erro funcional |
+| :--- | :--- | ---: | ---: | ---: |
+| Carga Black Friday | Aprovado | 314.87 ms | 0.00% | 0.00% |
+| Estresse Black Friday | Aprovado | 317.84 ms | 0.00% | 0.00% |
+
+Com isso, a aplicacao ficou abaixo do limite de latencia p95 de 5 segundos e abaixo do limite de erro de 5% nos dois cenarios.

@@ -5,7 +5,10 @@
   "main": "src/server.js",
   "scripts": {
     "test": "jest --runInBand",
-    "test:mutation": "stryker run"
+    "test:mutation": "stryker run",
+    "start": "node src/server.js",
+    "perf:load": "k6 run tests/performance/black-friday-load.js",
+    "perf:stress": "k6 run tests/performance/black-friday-stress.js"
   },
   "dependencies": {
     "express": "^4.19.2"
