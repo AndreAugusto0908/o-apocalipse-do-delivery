@@ -1,9 +1,23 @@
 const express = require('express');
 const { CheckoutService } = require('./services/CheckoutService');
 
-const criarGatewayPagamentoMock = () => ({
+const obterNumeroAmbiente = (nome, valorPadrao) => {
+  const valor = Number(process.env[nome]);
+
+  return Number.isFinite(valor) && valor >= 0 ? valor : valorPadrao;
+};
+
+const obterLatenciaGatewayMs = () => obterNumeroAmbiente('GATEWAY_LATENCY_MS', 300);
+
+const obterOpcoesCheckoutAmbiente = () => ({
+  timeoutMs: obterNumeroAmbiente('CHECKOUT_TIMEOUT_MS', 2000),
+  maxRetries: obterNumeroAmbiente('CHECKOUT_MAX_RETRIES', 3),
+  retryDelayMs: obterNumeroAmbiente('CHECKOUT_RETRY_DELAY_MS', 500)
+});
+
+const criarGatewayPagamentoMock = ({ latencyMs = obterLatenciaGatewayMs() } = {}) => ({
   cobrar: async () => new Promise((resolve) => {
-    setTimeout(() => resolve({ status: 'APROVADO' }), 300);
+    setTimeout(() => resolve({ status: 'APROVADO' }), latencyMs);
   })
 });
 
@@ -19,7 +33,7 @@ const criarCheckoutServicePadrao = () => new CheckoutService({
   gatewayPagamento: criarGatewayPagamentoMock(),
   pedidoRepository: criarPedidoRepositoryMock(),
   emailService: criarEmailServiceMock()
-});
+}, obterOpcoesCheckoutAmbiente());
 
 const cartaoValido = (cartao) => (
   cartao
@@ -109,7 +123,12 @@ module.exports = {
   createApp,
   startServer,
   pedidoValido,
-  cartaoValido
+  cartaoValido,
+  obterLatenciaGatewayMs,
+  obterOpcoesCheckoutAmbiente,
+  criarGatewayPagamentoMock
 };
+
+
 
 

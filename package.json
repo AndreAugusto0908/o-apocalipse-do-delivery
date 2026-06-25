@@ -7,10 +7,12 @@
     "test": "jest --runInBand",
     "test:mutation": "stryker run",
     "start": "node src/server.js",
+    "start:gateway-slow": "node src/server.js",
     "perf:load": "k6 run tests/performance/black-friday-load.js",
     "perf:stress": "k6 run tests/performance/black-friday-stress.js",
     "perf:herd": "k6 run tests/performance/thundering-herd-cache-flush.js",
-    "perf:herd:local": "k6 run -e HERD_VUS=100 tests/performance/thundering-herd-cache-flush.js"
+    "perf:herd:local": "k6 run -e HERD_VUS=100 tests/performance/thundering-herd-cache-flush.js",
+    "perf:gateway-slow": "k6 run tests/performance/gateway-lento-5000ms.js"
   },
   "dependencies": {
     "express": "^4.19.2"

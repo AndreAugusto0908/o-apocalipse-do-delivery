@@ -228,3 +228,33 @@ cache_flush_errors = 0.00%
 ```
 
 O script oficial permanece configurado para 10.000 VUs por padrao em `npm run perf:herd`; a execucao reduzida serve apenas para validar sintaxe e fluxo em maquina local.
+
+### Injecao de falhas - Gateway Lento
+
+Foi adicionado o cenario `tests/performance/gateway-lento-5000ms.js` para simular 5000 ms de latencia na API de pagamento parceira.
+
+Para executar o desastre, suba a aplicacao com a latencia do gateway configurada:
+
+```powershell
+$env:GATEWAY_LATENCY_MS='5000'; $env:CHECKOUT_TIMEOUT_MS='1000'; $env:CHECKOUT_MAX_RETRIES='1'; $env:CHECKOUT_RETRY_DELAY_MS='100'; npm start
+```
+
+Em outro terminal:
+
+```bash
+npm run perf:gateway-slow
+```
+
+O comportamento esperado e resiliente: o checkout nao deve esperar indefinidamente o gateway lento. Como o servico possui timeout operacional de 2000 ms, retry limitado e fallback, o k6 espera HTTP 500 com mensagem amigavel e p95 abaixo de 5 segundos.
+
+Evidencia local do cenario Gateway Lento:
+
+```text
+GATEWAY_LATENCY_MS=5000
+CHECKOUT_TIMEOUT_MS=1000
+CHECKOUT_MAX_RETRIES=1
+CHECKOUT_RETRY_DELAY_MS=100
+p95 = 2.14 s
+http_req_failed = 0.00%
+gateway_slow_errors = 0.00%
+```
