@@ -6,6 +6,7 @@ Integrantes
 * Igor Augusto Amaral Luz
 * Gustavo Ceolin Veloso
 * Gabriel da Silveira Macedo Neto
+* Vitor Hugo Dutra Marinho
 
 ## Resumo
 
