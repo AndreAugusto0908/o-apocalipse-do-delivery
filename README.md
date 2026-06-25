@@ -37,3 +37,29 @@ Com esse ciclo, os testes serviram como contrato de comportamento antes da imple
 Test Suites: 2 passed, 2 total
 Tests:       10 passed, 10 total
 ```
+
+## Test Patterns e Clean Code nos testes
+
+Os testes foram estruturados para evitar o cheiro de codigo conhecido como **Obscure Setup**, mantendo a preparacao dos cenarios clara, reutilizavel e modular. Para isso, foram aplicados os padroes **Data Builder** e **Object Mother** na criacao dos pedidos usados nos testes.
+
+| Exigencia | Como foi aplicado no projeto | Arquivo |
+| :--- | :--- | :--- |
+| Proibir Obscure Setup | A massa de teste nao fica espalhada dentro de cada cenario; os pedidos sao criados por builders e mothers reutilizaveis | `src/server.test.js` e `src/services/CheckoutService.test.js` |
+| Aplicar Data Builder | `PedidoCheckoutBuilder` e `PedidoBuilder` permitem montar pedidos validos e variar somente o dado relevante para cada teste | `src/server.test.js` e `src/services/CheckoutService.test.js` |
+| Aplicar Object Mother | `PedidoCheckoutMother` e `PedidoMother` oferecem fabricas semanticas como pedido valido, sem e-mail, valor invalido e cartao incompleto | `src/server.test.js` e `src/services/CheckoutService.test.js` |
+| Usar Stubs para estados de pagamento | `GatewayPagamentoStub` simula respostas do gateway como `APROVADO`, `RECUSADO`, erro transitorio, indisponibilidade persistente e ausencia de resposta | `src/services/CheckoutService.test.js` |
+| Usar Stubs para persistencia | `PedidoRepositoryStub` simula o salvamento do pedido e retorna um pedido com identificador | `src/services/CheckoutService.test.js` |
+| Usar Mocks para comportamento | `EmailServiceMock` permite verificar se o e-mail de confirmacao foi disparado ou bloqueado conforme o resultado do pagamento | `src/services/CheckoutService.test.js` |
+
+Exemplos de assercoes de comportamento implementadas:
+
+```javascript
+expect(deps.emailService.enviarConfirmacao).toHaveBeenCalledWith(
+  'cliente@entregasja.com',
+  'Pagamento Aprovado'
+);
+
+expect(deps.emailService.enviarConfirmacao).not.toHaveBeenCalled();
+```
+
+Dessa forma, os testes deixam explicito o comportamento esperado sem repetir configuracoes extensas em cada caso, melhorando legibilidade, manutencao e aderencia a Clean Code.
