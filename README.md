@@ -1,7 +1,7 @@
 # O Apocalipse do Delivery
 
 Intrgrantes
-* AndrÃ© Augusto Silva Carvalho
+* Andre Augusto Silva Carvalho
 * Kayler de Freitas Moura
 * Igor Augusto Amaral Luz
 * Gustavo Ceolin Veloso
@@ -86,4 +86,52 @@ const criarResultadoPagamentoHandlers = (checkoutService) => ({
 });
 ```
 
-Com essa estrutura, o metodo principal `processar` ficou mais orientado ao fluxo de alto nivel, enquanto as regras especificas de cada resultado de pagamento ficaram encapsuladas em classes proprias. Isso reduz a complexidade ciclomática percebida, facilita a extensao para novos status do gateway e preserva o comportamento validado pela suite de testes.
+Com essa estrutura, o metodo principal `processar` ficou mais orientado ao fluxo de alto nivel, enquanto as regras especificas de cada resultado de pagamento ficaram encapsuladas em classes proprias. Isso reduz a complexidade ciclomï¿½tica percebida, facilita a extensao para novos status do gateway e preserva o comportamento validado pela suite de testes.
+
+## Teste de mutacao com Stryker.js
+
+A qualidade da suite de testes tambem foi validada com **teste de mutacao**, porque cobertura de linhas so mostra quais trechos foram executados, mas nao garante que os testes detectam alteracoes indevidas na regra de negocio.
+
+Para isso, foi configurado o **Stryker.js** no projeto Node/Jest.
+
+| Item | Definicao no projeto |
+| :--- | :--- |
+| Ferramenta | Stryker.js |
+| Runner de testes | Jest |
+| Arquivo de configuracao | `stryker.conf.js` |
+| Comando | `npm run test:mutation` |
+| Meta minima obrigatoria | 80% de Mutation Score |
+| Resultado obtido | 100,00% de Mutation Score |
+
+A configuracao define que apenas o codigo de producao deve sofrer mutacao:
+
+```javascript
+mutate: [
+  'src/**/*.js',
+  '!src/**/*.test.js'
+]
+```
+
+Tambem foi configurado um limite de quebra da build em 80%:
+
+```javascript
+thresholds: {
+  high: 90,
+  low: 80,
+  break: 80
+}
+```
+
+Na primeira execucao, alguns mutantes sobreviveram em validacoes de entrada, resposta de fallback, configuracoes de resiliencia e comportamento assincrono. A suite foi enriquecida com testes adicionais em `src/server.test.js` e `src/services/CheckoutService.test.js`, cobrindo casos como e-mail invalido, cartao nulo, cartao sem numero, resposta HTTP 500, rota operacional, bootstrap HTTP, dependencias padrao do app, timeout, limpeza de timeout, circuit breaker sem `isOpen`, erro de persistencia, falha no envio de e-mail e fluxo de erro do gateway sem resposta.
+
+Resultado final da execucao:
+
+```text
+All files            | 100.00 mutation score
+CheckoutService.js   | 100.00 mutation score
+server.js            | 100.00 mutation score
+```
+
+Com isso, a suite supera a meta obrigatoria de Mutation Score minimo de 80% e terminou com 0 mutantes sobreviventes.
+
+

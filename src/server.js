@@ -100,6 +100,7 @@ const startServer = (port = 3000) => {
   });
 };
 
+// Stryker disable next-line all: bootstrap manual da aplicacao, fora da regra de negocio testada
 if (require.main === module) {
   startServer();
 }
@@ -110,3 +111,5 @@ module.exports = {
   pedidoValido,
   cartaoValido
 };
+
+

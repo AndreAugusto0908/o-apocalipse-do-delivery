@@ -1,5 +1,5 @@
 const request = require('supertest');
-const { createApp } = require('./server');
+const { createApp, startServer, cartaoValido } = require('./server');
 
 class PedidoCheckoutBuilder {
   constructor() {
@@ -104,5 +104,123 @@ describe('POST /api/v1/checkout', () => {
     expect(checkoutService.processar).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'PENDENTE' })
     );
+  });
+});
+
+describe('POST /api/v1/checkout - contratos adicionais contra mutantes', () => {
+  test('rejeita e-mail invalido antes de chamar o checkout', async () => {
+    const checkoutService = CheckoutServiceMock.naoDeveSerChamado();
+    const app = createApp({ checkoutService });
+
+    const resposta = await request(app)
+      .post('/api/v1/checkout')
+      .send({ ...PedidoCheckoutMother.valido(), clienteEmail: 'email-invalido' });
+
+    expect(resposta.status).toBe(400);
+    expect(checkoutService.processar).not.toHaveBeenCalled();
+  });
+
+  test('rejeita cartao nulo antes de chamar o checkout', async () => {
+    const checkoutService = CheckoutServiceMock.naoDeveSerChamado();
+    const app = createApp({ checkoutService });
+
+    const resposta = await request(app)
+      .post('/api/v1/checkout')
+      .send({ ...PedidoCheckoutMother.valido(), cartao: null });
+
+    expect(resposta.status).toBe(400);
+    expect(checkoutService.processar).not.toHaveBeenCalled();
+  });
+
+  test('rejeita cartao sem numero antes de chamar o checkout', async () => {
+    const checkoutService = CheckoutServiceMock.naoDeveSerChamado();
+    const app = createApp({ checkoutService });
+    const pedido = PedidoCheckoutMother.valido();
+    delete pedido.cartao.numero;
+
+    const resposta = await request(app)
+      .post('/api/v1/checkout')
+      .send(pedido);
+
+    expect(resposta.status).toBe(400);
+    expect(checkoutService.processar).not.toHaveBeenCalled();
+  });
+
+
+  test('cartao precisa ser objeto mesmo quando possui campos compativeis', () => {
+    const cartaoComoFuncao = () => undefined;
+    cartaoComoFuncao.numero = '4111111111111111';
+    cartaoComoFuncao.validade = '12/30';
+    cartaoComoFuncao.cvv = '123';
+
+    expect(cartaoValido(cartaoComoFuncao)).toBe(false);
+  });
+  test('retorna 500 com mensagem amigavel quando o checkout nao processa o pedido', async () => {
+    const checkoutService = { processar: jest.fn(async () => null) };
+    const app = createApp({ checkoutService });
+
+    const resposta = await request(app)
+      .post('/api/v1/checkout')
+      .send(PedidoCheckoutMother.valido());
+
+    expect(resposta.status).toBe(500);
+    expect(resposta.body).toEqual({
+      erro: 'Nao foi possivel processar seu pagamento. Tente mais tarde.'
+    });
+  });
+
+  test('usa as dependencias padrao do app para processar checkout realista', async () => {
+    jest.spyOn(Math, 'random').mockReturnValue(0.5);
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    const app = createApp();
+
+    const resposta = await request(app)
+      .post('/api/v1/checkout')
+      .send(PedidoCheckoutMother.valido());
+
+    expect(resposta.status).toBe(200);
+    expect(resposta.body.pedido).toMatchObject({
+      id: 5000,
+      status: 'PROCESSADO'
+    });
+    expect(console.log).toHaveBeenCalledWith('E-mail enviado para cliente@entregasja.com');
+
+    Math.random.mockRestore();
+    console.log.mockRestore();
+  });
+});
+
+describe('Rotas operacionais', () => {
+  test('expoe rota para limpeza de cache', async () => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    const app = createApp({ checkoutService: CheckoutServiceMock.naoDeveSerChamado() });
+
+    const resposta = await request(app).post('/api/v1/cache/flush').send({});
+
+    expect(resposta.status).toBe(200);
+    expect(resposta.body).toEqual({ status: 'cache_invalidated' });
+    expect(console.log).toHaveBeenCalledWith('CACHE LIMPO ABRUPTAMENTE!');
+
+    console.log.mockRestore();
+  });
+});
+
+
+
+
+describe('Bootstrap HTTP', () => {
+  test('startServer inicializa e retorna um servidor fechavel', (done) => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    const server = startServer(0);
+
+    server.on('listening', () => {
+      expect(server.listening).toBe(true);
+      expect(console.log).toHaveBeenCalledWith('Servidor da EntregasJa rodando na porta 0');
+      server.close(() => {
+        console.log.mockRestore();
+        done();
+      });
+    });
   });
 });
