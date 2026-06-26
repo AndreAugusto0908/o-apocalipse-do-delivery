@@ -4,6 +4,7 @@ class CheckoutService {
     this.pedidoRepository = dependencies.pedidoRepository;
     this.emailService = dependencies.emailService;
     this.timeoutMs = options.timeoutMs ?? 2000;
+    this.repoTimeoutMs = options.repoTimeoutMs ?? this.timeoutMs;
     this.maxRetries = options.maxRetries ?? 3;
     this.retryDelayMs = options.retryDelayMs ?? 500;
     this.jitterRatio = options.jitterRatio ?? 0.2;
@@ -68,16 +69,24 @@ class CheckoutService {
     return null;
   }
 
-  comTimeout(operacao) {
+  comTimeout(operacao, timeoutMs = this.timeoutMs, mensagemErro = 'TIMEOUT_GATEWAY') {
     let timeoutId;
 
     const timeout = new Promise((_, reject) => {
       timeoutId = setTimeout(() => {
-        reject(new Error('TIMEOUT_GATEWAY'));
-      }, this.timeoutMs);
+        reject(new Error(mensagemErro));
+      }, timeoutMs);
     });
 
     return Promise.race([operacao, timeout]).finally(() => clearTimeout(timeoutId));
+  }
+
+  persistir(pedido) {
+    return this.comTimeout(
+      this.pedidoRepository.salvar(pedido),
+      this.repoTimeoutMs,
+      'TIMEOUT_REPOSITORIO'
+    );
   }
 
   calcularBackoffComJitter(tentativa) {
@@ -100,7 +109,13 @@ class CheckoutService {
 
   async registrarErroGateway(pedido) {
     pedido.status = 'ERRO_GATEWAY';
-    await this.pedidoRepository.salvar(pedido);
+
+    try {
+      await this.persistir(pedido);
+    } catch (error) {
+      console.error('Falha ao persistir status de erro do pedido:', error.message);
+    }
+
     return null;
   }
 }
@@ -112,7 +127,7 @@ class PagamentoAprovadoHandler {
 
   async processar(pedido) {
     pedido.status = 'PROCESSADO';
-    const pedidoSalvo = await this.checkoutService.pedidoRepository.salvar(pedido);
+    const pedidoSalvo = await this.checkoutService.persistir(pedido);
 
     this.checkoutService.enviarConfirmacaoSemBloquear(pedido.clienteEmail);
 
@@ -127,7 +142,7 @@ class PagamentoRecusadoHandler {
 
   async processar(pedido) {
     pedido.status = 'FALHOU';
-    await this.checkoutService.pedidoRepository.salvar(pedido);
+    await this.checkoutService.persistir(pedido);
     return null;
   }
 }
