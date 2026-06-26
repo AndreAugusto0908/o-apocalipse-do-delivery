@@ -33,7 +33,7 @@ O escopo cobre o processamento de pedidos no fluxo de checkout, incluindo:
 - tratamento de erro de infraestrutura;
 - timeout operacional de 2000 ms;
 - politica de retry com ate 3 retentativas;
-- intervalo fixo de backoff de 500 ms;
+- backoff exponencial com jitter (base de 500 ms);
 - fallback com status `ERRO_GATEWAY`;
 - comportamento esperado com circuit breaker;
 - testes de carga e latencia usando k6;
@@ -90,41 +90,41 @@ A contingencia cobre ajustes de massa, instabilidade de ambiente, refinamento de
 | CT14 | Executar retry quando ocorrer erro transitorio de infraestrutura | Unitario | Complexa | 8 |
 | CT15 | Recuperar no retry e concluir pedido como `PROCESSADO` | Integracao | Complexa | 8 |
 | CT16 | Esgotar 3 retentativas e acionar fallback | Integracao | Complexa | 8 |
-| CT17 | Respeitar backoff de 500 ms entre tentativas | Unitario | Complexa | 8 |
+| CT17 | Respeitar backoff exponencial com jitter (base 500 ms) entre tentativas | Unitario | Complexa | 8 |
 | CT18 | Bloquear chamada ao gateway quando circuit breaker estiver aberto | Integracao | Complexa | 8 |
 | CT19 | Retornar mensagem amigavel no fallback de erro critico | API | Media | 4 |
 | CT20 | Garantir que erros nao gerem excecoes nao capturadas no Node.js | Resiliencia | Complexa | 8 |
 | CT21 | Validar contrato dos status finais: `PROCESSADO`, `FALHOU`, `ERRO_GATEWAY` | Integracao | Media | 4 |
 | CT22 | Teste de carga com taxa de sucesso global acima de 95% | Performance | Critica | 13 |
-| CT23 | Teste de latencia com p95 abaixo de 2500 ms | Performance | Critica | 13 |
+| CT23 | Teste de latencia com p95 dentro do SLO (< 5000 ms) | Performance | Critica | 13 |
 | CT24 | Teste de estresse com latencia artificial no gateway via Toxiproxy | Caos/SRE | Critica | 13 |
 
-**Total de pontos de teste:** 142 pontos
+**Total de pontos de teste:** 147 pontos
 
 ## 7. Calculo de Esforco
 
 | Item | Calculo | Resultado |
 | :--- | :--- | ---: |
-| Pontos totais de teste | Soma dos pontos da matriz | 142 pontos |
+| Pontos totais de teste | Soma dos pontos da matriz | 147 pontos |
 | Produtividade adotada | 1,5 h por ponto | - |
-| Esforco base | 142 x 1,5 h | 213 h |
-| Contingencia tecnica | 20% de 213 h | 42,6 h |
-| Esforco total estimado | 213 h + 42,6 h | 255,6 h |
+| Esforco base | 147 x 1,5 h | 220,5 h |
+| Contingencia tecnica | 20% de 220,5 h | 44,1 h |
+| Esforco total estimado | 220,5 h + 44,1 h | 264,6 h |
 
-**Estimativa arredondada:** **256 horas/homem**
+**Estimativa arredondada:** **265 horas/homem**
 
 ## 8. Distribuicao do Esforco por Atividade
 
 | Atividade | Percentual | Horas estimadas |
 | :--- | ---: | ---: |
-| Planejamento e desenho dos cenarios | 15% | 38 h |
-| Implementacao dos testes unitarios | 20% | 51 h |
-| Implementacao dos testes de integracao/API | 20% | 51 h |
-| Implementacao dos testes de resiliencia | 15% | 38 h |
+| Planejamento e desenho dos cenarios | 15% | 40 h |
+| Implementacao dos testes unitarios | 20% | 53 h |
+| Implementacao dos testes de integracao/API | 20% | 53 h |
+| Implementacao dos testes de resiliencia | 15% | 40 h |
 | Preparacao de ambiente, mocks, stubs e Toxiproxy | 10% | 26 h |
 | Testes de carga, estresse e analise de SLO | 10% | 26 h |
-| Execucao, evidencias, reteste e relatorio final | 10% | 26 h |
-| **Total** | **100%** | **256 h** |
+| Execucao, evidencias, reteste e relatorio final | 10% | 27 h |
+| **Total** | **100%** | **265 h** |
 
 ## 9. Recursos Humanos Necessarios
 
@@ -152,21 +152,21 @@ A contingencia cobre ajustes de massa, instabilidade de ambiente, refinamento de
 A funcionalidade sera considerada suficientemente testada quando:
 
 - todos os fluxos funcionais da matriz de rastreabilidade forem cobertos;
-- todos os caminhos independentes do metodo principal forem exercitados;
+- todos os caminhos independentes do metodo principal forem exercitados (V(G) = 4 para `processar`, ver `docs/fluxo-controle-checkout.html`);
 - houver testes negativos para payload invalido;
 - pagamentos recusados nao dispararem e-mail de confirmacao;
 - falhas do gateway resultarem em `ERRO_GATEWAY` sem excecao nao capturada;
 - retries, timeout e backoff forem verificados por testes automatizados;
 - o fallback for testado apos esgotamento das retentativas;
 - o endpoint atingir taxa de sucesso global superior a 95% no teste de carga;
-- o p95 das requisicoes bem-sucedidas ficar abaixo de 2500 ms;
+- o p95 das requisicoes ficar abaixo do SLO de 5000 ms;
 - os resultados forem documentados com evidencias de execucao.
 
 ## 12. Riscos da Estimativa
 
 | Risco | Impacto | Mitigacao |
 | :--- | :--- | :--- |
-| Requisito de circuit breaker ainda nao implementado | Alto | Criar testes pendentes ou contratos esperados antes da refatoracao. |
+| Circuit breaker implementado (`CircuitBreaker.js`) e exercitado por testes | Baixo | Manter cobertura de mutacao sobre as transicoes de estado (closed/open/half-open). |
 | E-mail atualmente acoplado ao fluxo sincrono | Medio | Isolar por mock e validar comportamento assincromo apos refatoracao. |
 | Simulacao de timeout pode variar conforme ambiente | Medio | Usar fake timers em testes unitarios e Toxiproxy nos testes de integracao. |
 | Testes de performance dependem de maquina e rede | Alto | Definir ambiente controlado e registrar configuracao da execucao. |
@@ -174,6 +174,6 @@ A funcionalidade sera considerada suficientemente testada quando:
 
 ## 13. Conclusao
 
-Com base na tecnica de Pontos de Caso de Teste adaptada, a funcionalidade de checkout exige **142 pontos de teste**, resultando em uma estimativa de **256 horas/homem** para planejamento, implementacao, execucao, validacao de resiliencia, testes de performance e documentacao final.
+Com base na tecnica de Pontos de Caso de Teste adaptada, a funcionalidade de checkout exige **147 pontos de teste**, resultando em uma estimativa de **265 horas/homem** para planejamento, implementacao, execucao, validacao de resiliencia, testes de performance e documentacao final.
 
 A estimativa reflete um componente de alta criticidade, com dependencia de gateway externo, persistencia de pedidos, envio de e-mail, tratamento de falhas e requisitos nao funcionais rigorosos para operacao em alto volume.

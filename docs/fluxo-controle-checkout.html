@@ -1,468 +1,89 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Grafo de Fluxo de Controle - CheckoutService.processar</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
   <style>
-    :root {
-      color-scheme: light;
-      --bg: #f6f7f9;
-      --ink: #1f2933;
-      --muted: #5f6b7a;
-      --line: #6b7280;
-      --start: #0f766e;
-      --action: #2563eb;
-      --decision: #b45309;
-      --success: #15803d;
-      --fail: #b91c1c;
-      --card: #ffffff;
-      --border: #d6dbe3;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      margin: 0;
-      font-family: Arial, Helvetica, sans-serif;
-      color: var(--ink);
-      background: var(--bg);
-    }
-
-    header {
-      padding: 28px 32px 18px;
-      background: #ffffff;
-      border-bottom: 1px solid var(--border);
-    }
-
-    h1 {
-      margin: 0 0 8px;
-      font-size: 28px;
-      line-height: 1.2;
-      letter-spacing: 0;
-    }
-
-    .subtitle {
-      margin: 0;
-      color: var(--muted);
-      font-size: 15px;
-      line-height: 1.5;
-      max-width: 980px;
-    }
-
-    main {
-      max-width: 1280px;
-      margin: 0 auto;
-      padding: 24px;
-    }
-
-    .panel {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      box-shadow: 0 10px 30px rgba(31, 41, 51, 0.08);
-      overflow: hidden;
-    }
-
-    .panel-header {
-      display: flex;
-      justify-content: space-between;
-      gap: 16px;
-      align-items: center;
-      padding: 18px 20px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .panel-header h2 {
-      margin: 0;
-      font-size: 18px;
-      letter-spacing: 0;
-    }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      min-height: 30px;
-      padding: 6px 10px;
-      border-radius: 999px;
-      background: #eef2ff;
-      color: #3730a3;
-      font-size: 13px;
-      font-weight: 700;
-      white-space: nowrap;
-    }
-
-    .graph-wrap {
-      overflow-x: auto;
-      padding: 24px;
-      background:
-        linear-gradient(#eef1f5 1px, transparent 1px),
-        linear-gradient(90deg, #eef1f5 1px, transparent 1px);
-      background-size: 32px 32px;
-    }
-
-    svg {
-      display: block;
-      min-width: 1100px;
-      width: 100%;
-      height: auto;
-    }
-
-    .node rect,
-    .node path,
-    .node polygon {
-      stroke-width: 2;
-      filter: drop-shadow(0 4px 8px rgba(31, 41, 51, 0.12));
-    }
-
-    .node text {
-      font-size: 14px;
-      fill: var(--ink);
-      text-anchor: middle;
-      dominant-baseline: middle;
-      letter-spacing: 0;
-    }
-
-    .node .label {
-      font-weight: 700;
-    }
-
-    .node .small {
-      font-size: 12px;
-      fill: var(--muted);
-      font-weight: 400;
-    }
-
-    .start rect {
-      fill: #ecfdf5;
-      stroke: var(--start);
-    }
-
-    .action rect {
-      fill: #eff6ff;
-      stroke: var(--action);
-    }
-
-    .decision polygon {
-      fill: #fffbeb;
-      stroke: var(--decision);
-    }
-
-    .success rect {
-      fill: #f0fdf4;
-      stroke: var(--success);
-    }
-
-    .failure rect {
-      fill: #fef2f2;
-      stroke: var(--fail);
-    }
-
-    .catch rect {
-      fill: #fff7ed;
-      stroke: #c2410c;
-    }
-
-    .edge {
-      fill: none;
-      stroke: var(--line);
-      stroke-width: 2.3;
-      marker-end: url(#arrow);
-    }
-
-    .edge.success-line {
-      stroke: var(--success);
-    }
-
-    .edge.fail-line {
-      stroke: var(--fail);
-    }
-
-    .edge.catch-line {
-      stroke: #c2410c;
-      stroke-dasharray: 8 6;
-    }
-
-    .edge-label {
-      font-size: 13px;
-      font-weight: 700;
-      fill: #374151;
-      paint-order: stroke;
-      stroke: #ffffff;
-      stroke-width: 5px;
-      stroke-linejoin: round;
-    }
-
-    .info-grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 16px;
-      margin-top: 20px;
-    }
-
-    .info {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 16px;
-    }
-
-    .info h3 {
-      margin: 0 0 10px;
-      font-size: 16px;
-      letter-spacing: 0;
-    }
-
-    .info p,
-    .info li {
-      color: var(--muted);
-      font-size: 14px;
-      line-height: 1.5;
-    }
-
-    .info p {
-      margin: 0;
-    }
-
-    ul {
-      margin: 0;
-      padding-left: 20px;
-    }
-
-    code {
-      font-family: Consolas, Monaco, monospace;
-      font-size: 0.95em;
-      color: #111827;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 20px;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      overflow: hidden;
-      display: table;
-    }
-
-    th,
-    td {
-      padding: 12px 14px;
-      border-bottom: 1px solid var(--border);
-      text-align: left;
-      font-size: 14px;
-      vertical-align: top;
-    }
-
-    th {
-      background: #f9fafb;
-      color: #374151;
-      font-size: 13px;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-
-    tr:last-child td {
-      border-bottom: 0;
-    }
-
-    @media (max-width: 900px) {
-      header {
-        padding: 22px 18px 16px;
-      }
-
-      main {
-        padding: 16px;
-      }
-
-      h1 {
-        font-size: 23px;
-      }
-
-      .panel-header {
-        align-items: flex-start;
-        flex-direction: column;
-      }
-
-      .info-grid {
-        grid-template-columns: 1fr;
-      }
-
-      th,
-      td {
-        font-size: 13px;
-      }
-    }
+    body { font-family: system-ui, Arial, sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; color: #1b1b1b; line-height: 1.55; }
+    h1 { font-size: 1.6rem; }
+    .badge { display: inline-block; background: #0b6; color: #fff; padding: .2rem .6rem; border-radius: .4rem; font-weight: 600; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    th, td { border: 1px solid #ccc; padding: .5rem .6rem; text-align: left; font-size: .92rem; }
+    th { background: #f3f3f3; }
+    code { background: #f3f3f3; padding: .1rem .3rem; border-radius: .25rem; }
+    .mermaid { background: #fafafa; border: 1px solid #e3e3e3; border-radius: .5rem; padding: 1rem; }
   </style>
 </head>
 <body>
-  <header>
-    <h1>Grafo de Fluxo de Controle do Checkout</h1>
-    <p class="subtitle">
-      Mapeamento estrutural do m&eacute;todo <code>CheckoutService.processar(pedido)</code>,
-      refletindo o comportamento implementado no c&oacute;digo legado atual.
-    </p>
-  </header>
+  <h1>Grafo de Fluxo de Controle &mdash; <code>CheckoutService.processar(pedido)</code></h1>
+  <p>
+    Reflete o <strong>codigo ATUAL refatorado</strong> em
+    <code>src/services/CheckoutService.js</code> (guarda de circuit breaker,
+    cobranca resiliente e despacho por handler de status). Substitui o grafo
+    anterior, que descrevia o codigo legado sincrono.
+  </p>
+  <p>Complexidade ciclomatica do metodo principal: <span class="badge">V(G) = 4</span></p>
 
-  <main>
-    <section class="panel" aria-labelledby="cfg-title">
-      <div class="panel-header">
-        <h2 id="cfg-title">Fluxo executado pelo m&eacute;todo <code>processar</code></h2>
-        <span class="badge">Complexidade ciclom&aacute;tica: 3</span>
-      </div>
+  <div class="mermaid">
+flowchart TD
+  A([Inicio: processar pedido]) --> B{"gatewayIndisponivel? (circuit breaker aberto)"}
+  B -- sim --> Z1["registrarErroGateway: status ERRO_GATEWAY + persiste"]
+  Z1 --> R1([retorna null - HTTP 500])
+  B -- nao --> C["resposta = cobrarComResiliencia(pedido): timeout + retry + backoff com jitter"]
+  C --> D{"resposta nula? (retentativas esgotadas)"}
+  D -- sim --> Z2["registrarErroGateway"]
+  Z2 --> R2([retorna null - HTTP 500])
+  D -- nao --> E["try: processarResultadoPagamento - handler por status (Aprovado/Recusado)"]
+  E --> F{"excecao ao persistir/finalizar?"}
+  F -- sim --> Z3["catch: registrarErroGateway"]
+  Z3 --> R3([retorna null - HTTP 500])
+  F -- nao --> R4([retorna pedido - PROCESSADO ou FALHOU])
+  </div>
 
-      <div class="graph-wrap">
-        <svg viewBox="0 0 1180 900" role="img" aria-labelledby="svg-title svg-desc">
-          <title id="svg-title">Grafo de fluxo de controle do CheckoutService.processar</title>
-          <desc id="svg-desc">
-            O grafo mostra entrada, tentativa de cobranca, decisao por status aprovado,
-            caminho aprovado, caminho de falha de negocio e caminho de excecao.
-          </desc>
+  <h2>Calculo da Complexidade Ciclomatica V(G)</h2>
+  <p>Escopo medido: o corpo do metodo <code>processar</code> (os helpers que ele
+  invoca tem complexidade propria, tabelada mais abaixo).</p>
+  <ul>
+    <li><strong>Pontos de decisao (predicados):</strong> 3
+      <ul>
+        <li>P1: <code>if (this.gatewayIndisponivel())</code> &mdash; <code>CheckoutService.js:17</code></li>
+        <li>P2: <code>if (!resposta)</code> &mdash; <code>CheckoutService.js:23</code></li>
+        <li>P3: <code>try/catch</code> ao processar resultado &mdash; <code>CheckoutService.js:27-29</code></li>
+      </ul>
+    </li>
+  </ul>
+  <p>
+    <strong>Por predicados:</strong> V(G) = predicados + 1 = 3 + 1 = <strong>4</strong><br />
+    <strong>Por regioes:</strong> o grafo delimita 4 regioes fechadas = <strong>4</strong><br />
+    <strong>Por arestas/nos:</strong> com 11 nos e 13 arestas (1 componente),
+    V(G) = E &minus; N + 2P = 13 &minus; 11 + 2 = <strong>4</strong>
+  </p>
 
-          <defs>
-            <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
-              <path d="M2,2 L10,6 L2,10 Z" fill="#6b7280"></path>
-            </marker>
-          </defs>
+  <h2>Caminhos independentes (minimo a cobrir)</h2>
+  <table>
+    <tr><th>#</th><th>Caminho</th><th>Resultado</th></tr>
+    <tr><td>1</td><td>P1 verdadeiro</td><td>Circuit breaker aberto &rarr; ERRO_GATEWAY (500)</td></tr>
+    <tr><td>2</td><td>P1 falso &rarr; P2 verdadeiro</td><td>Gateway falhou/timeout esgotou retentativas &rarr; ERRO_GATEWAY (500)</td></tr>
+    <tr><td>3</td><td>P1 falso &rarr; P2 falso &rarr; P3 verdadeiro</td><td>Falha ao persistir/finalizar &rarr; ERRO_GATEWAY (500)</td></tr>
+    <tr><td>4</td><td>P1 falso &rarr; P2 falso &rarr; P3 falso</td><td>Sucesso &rarr; PROCESSADO (200) ou FALHOU (500)</td></tr>
+  </table>
 
-          <g class="node start" transform="translate(490 30)">
-            <rect width="200" height="62" rx="31"></rect>
-            <text x="100" y="23" class="label">N1 - Entrada</text>
-            <text x="100" y="43" class="small">processar(pedido)</text>
-          </g>
+  <h2>Complexidade da cadeia de resiliencia (helpers)</h2>
+  <p>O metodo <code>processar</code> delega para helpers com decisoes proprias.
+  Ao planejar a cobertura, somam-se estes caminhos:</p>
+  <table>
+    <tr><th>Metodo</th><th>Decisoes</th><th>V(G)</th></tr>
+    <tr><td><code>cobrarComResiliencia</code></td><td>laco de retry + <code>tentativa === totalTentativas</code></td><td>3</td></tr>
+    <tr><td><code>obterHandlerResultadoPagamento</code></td><td><code>?? RECUSADO</code> (fallback)</td><td>2</td></tr>
+    <tr><td><code>gatewayIndisponivel</code></td><td><code>?.isOpen?.()</code> (optional chaining)</td><td>2</td></tr>
+  </table>
+  <p>Considerando a cadeia completa exercitada por <code>processar</code>, a
+  complexidade efetiva fica entre 7 (contando apenas <code>if/for/catch</code>) e
+  10 (contando tambem os operadores de curto-circuito <code>?.</code> e
+  <code>??</code>).</p>
 
-          <g class="node action" transform="translate(430 140)">
-            <rect width="320" height="74" rx="8"></rect>
-            <text x="160" y="25" class="label">N2 - Inicia bloco try</text>
-            <text x="160" y="47" class="small">gatewayPagamento.cobrar(valor, cartao)</text>
-          </g>
-
-          <g class="node decision" transform="translate(425 280)">
-            <polygon points="165,0 330,82 165,164 0,82"></polygon>
-            <text x="165" y="68" class="label">N3 - Decis&atilde;o</text>
-            <text x="165" y="92" class="small">resposta.status ===</text>
-            <text x="165" y="112" class="small">'APROVADO'?</text>
-          </g>
-
-          <g class="node success" transform="translate(80 520)">
-            <rect width="280" height="84" rx="8"></rect>
-            <text x="140" y="27" class="label">N4 - Caminho aprovado</text>
-            <text x="140" y="50" class="small">pedido.status = 'PROCESSADO'</text>
-            <text x="140" y="68" class="small">pedidoRepository.salvar(pedido)</text>
-          </g>
-
-          <g class="node success" transform="translate(80 690)">
-            <rect width="280" height="84" rx="8"></rect>
-            <text x="140" y="27" class="label">N5 - E-mail sincronizado</text>
-            <text x="140" y="50" class="small">enviarConfirmacao(...)</text>
-            <text x="140" y="68" class="small">return pedidoSalvo</text>
-          </g>
-
-          <g class="node failure" transform="translate(455 560)">
-            <rect width="270" height="92" rx="8"></rect>
-            <text x="135" y="26" class="label">N6 - Falha de neg&oacute;cio</text>
-            <text x="135" y="50" class="small">pedido.status = 'FALHOU'</text>
-            <text x="135" y="68" class="small">salvar(pedido)</text>
-            <text x="135" y="84" class="small">return null</text>
-          </g>
-
-          <g class="node catch" transform="translate(830 520)">
-            <rect width="280" height="118" rx="8"></rect>
-            <text x="140" y="27" class="label">N7 - Exce&ccedil;&atilde;o capturada</text>
-            <text x="140" y="51" class="small">console.error(...)</text>
-            <text x="140" y="71" class="small">pedido.status = 'ERRO_GATEWAY'</text>
-            <text x="140" y="91" class="small">salvar(pedido)</text>
-            <text x="140" y="109" class="small">return null</text>
-          </g>
-
-          <g class="node start" transform="translate(490 820)">
-            <rect width="200" height="54" rx="27"></rect>
-            <text x="100" y="28" class="label">Fim</text>
-          </g>
-
-          <path class="edge" d="M590 92 L590 130"></path>
-          <path class="edge" d="M590 214 L590 270"></path>
-
-          <path class="edge success-line" d="M425 362 C300 380 220 430 220 510"></path>
-          <text class="edge-label" x="305" y="410">Sim</text>
-
-          <path class="edge success-line" d="M220 604 L220 680"></path>
-          <path class="edge success-line" d="M360 732 C430 780 485 810 560 828"></path>
-
-          <path class="edge fail-line" d="M590 444 L590 550"></path>
-          <text class="edge-label" x="606" y="505">N&atilde;o</text>
-          <path class="edge fail-line" d="M590 652 L590 810"></path>
-
-          <path class="edge catch-line" d="M750 174 C1015 215 1040 360 990 510"></path>
-          <text class="edge-label" x="950" y="286">Erro no try</text>
-          <path class="edge catch-line" d="M970 638 C930 750 805 820 700 840"></path>
-        </svg>
-      </div>
-    </section>
-
-    <section class="info-grid" aria-label="Resumo da analise">
-      <article class="info">
-        <h3>N&oacute;s de decis&atilde;o</h3>
-        <p>
-          O c&oacute;digo possui uma decis&atilde;o expl&iacute;cita:
-          <code>resposta.status === 'APROVADO'</code>. O bloco
-          <code>catch</code> adiciona um segundo caminho independente de erro.
-        </p>
-      </article>
-
-      <article class="info">
-        <h3>Caminhos independentes</h3>
-        <ul>
-          <li>Aprovado: cobra, salva como <code>PROCESSADO</code>, envia e-mail e retorna o pedido.</li>
-          <li>Recusado: salva como <code>FALHOU</code> e retorna <code>null</code>.</li>
-          <li>Exce&ccedil;&atilde;o: salva como <code>ERRO_GATEWAY</code> e retorna <code>null</code>.</li>
-        </ul>
-      </article>
-
-      <article class="info">
-        <h3>M&eacute;trica</h3>
-        <p>
-          Pela f&oacute;rmula <code>M = E - N + 2P</code>, considerando um componente conectado,
-          o grafo resulta em <code>M = 9 - 8 + 2 = 3</code>. O mesmo valor aparece por
-          <code>decis&otilde;es + 1</code>: <code>if</code> + <code>catch</code> + 1.
-        </p>
-      </article>
-    </section>
-
-    <table aria-label="Tabela de nos do grafo">
-      <thead>
-        <tr>
-          <th>N&oacute;</th>
-          <th>Responsabilidade</th>
-          <th>Risco observado no legado</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td><code>N2</code></td>
-          <td>Chama o gateway externo de pagamento.</td>
-          <td>N&atilde;o existe timeout, retry ou circuit breaker no m&eacute;todo atual.</td>
-        </tr>
-        <tr>
-          <td><code>N5</code></td>
-          <td>Envia confirma&ccedil;&atilde;o por e-mail depois de salvar o pedido aprovado.</td>
-          <td>O envio &eacute; aguardado de forma s&iacute;ncrona e pode atrasar a resposta do checkout.</td>
-        </tr>
-        <tr>
-          <td><code>N6</code></td>
-          <td>Trata falha de neg&oacute;cio retornada pelo gateway.</td>
-          <td>Retorna <code>null</code>, sem diferenciar explicitamente a causa para a camada HTTP.</td>
-        </tr>
-        <tr>
-          <td><code>N7</code></td>
-          <td>Trata exce&ccedil;&otilde;es de infraestrutura no bloco <code>catch</code>.</td>
-          <td>Falha de forma bruta, sem retentativas, fallback estruturado ou erro tipado.</td>
-        </tr>
-      </tbody>
-    </table>
-  </main>
+  <script>mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
 </body>
 </html>
