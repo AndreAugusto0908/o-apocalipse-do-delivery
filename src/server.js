@@ -1,6 +1,7 @@
 const express = require('express');
 const { CheckoutService } = require('./services/CheckoutService');
 const { CircuitBreaker } = require('./services/CircuitBreaker');
+const { Bulkhead, BulkheadCheioError } = require('./services/Bulkhead');
 
 const obterNumeroAmbiente = (nome, valorPadrao) => {
   const valor = Number(process.env[nome]);
@@ -37,6 +38,13 @@ const obterOpcoesCircuitBreakerAmbiente = () => ({
 });
 
 const criarCircuitBreakerPadrao = () => new CircuitBreaker(obterOpcoesCircuitBreakerAmbiente());
+
+const obterOpcoesBulkheadAmbiente = () => ({
+  maxConcurrent: obterNumeroAmbiente('CHECKOUT_BULKHEAD_MAX', 200),
+  maxQueue: obterNumeroAmbiente('CHECKOUT_BULKHEAD_QUEUE', 200)
+});
+
+const criarBulkheadPadrao = () => new Bulkhead(obterOpcoesBulkheadAmbiente());
 
 const criarCheckoutServicePadrao = () => new CheckoutService({
   gatewayPagamento: criarGatewayPagamentoMock(),
@@ -81,6 +89,10 @@ const respostaCheckoutNaoProcessado = (res) => res.status(500).json({
   erro: 'Nao foi possivel processar seu pagamento. Tente mais tarde.'
 });
 
+const respostaCheckoutSobrecarregado = (res) => res.status(503).json({
+  erro: 'Sistema sobrecarregado. Tente novamente em instantes.'
+});
+
 const responderResultadoCheckout = (res, resultado) => {
   if (checkoutProcessado(resultado)) {
     return respostaCheckoutProcessado(res, resultado);
@@ -89,16 +101,23 @@ const responderResultadoCheckout = (res, resultado) => {
   return respostaCheckoutNaoProcessado(res);
 };
 
-const registrarRotasCheckout = (app, checkoutService) => {
+const registrarRotasCheckout = (app, checkoutService, bulkhead) => {
   app.post('/api/v1/checkout', async (req, res) => {
     if (!pedidoValido(req.body)) {
       return res.status(400).json({ erro: 'Dados incompletos para checkout' });
     }
 
     const pedido = criarPedidoCheckout(req.body);
-    const resultado = await checkoutService.processar(pedido);
 
-    return responderResultadoCheckout(res, resultado);
+    try {
+      const resultado = await bulkhead.executar(() => checkoutService.processar(pedido));
+      return responderResultadoCheckout(res, resultado);
+    } catch (error) {
+      if (error instanceof BulkheadCheioError) {
+        return respostaCheckoutSobrecarregado(res);
+      }
+      return respostaCheckoutNaoProcessado(res);
+    }
   });
 };
 
@@ -109,11 +128,14 @@ const registrarRotasOperacionais = (app) => {
   });
 };
 
-const createApp = ({ checkoutService = criarCheckoutServicePadrao() } = {}) => {
+const createApp = ({
+  checkoutService = criarCheckoutServicePadrao(),
+  bulkhead = criarBulkheadPadrao()
+} = {}) => {
   const app = express();
   app.use(express.json());
 
-  registrarRotasCheckout(app, checkoutService);
+  registrarRotasCheckout(app, checkoutService, bulkhead);
   registrarRotasOperacionais(app);
 
   return app;
@@ -139,9 +161,11 @@ module.exports = {
   obterLatenciaGatewayMs,
   obterOpcoesCheckoutAmbiente,
   obterOpcoesCircuitBreakerAmbiente,
+  obterOpcoesBulkheadAmbiente,
   criarGatewayPagamentoMock,
   criarCheckoutServicePadrao,
-  criarCircuitBreakerPadrao
+  criarCircuitBreakerPadrao,
+  criarBulkheadPadrao
 };
 
 
