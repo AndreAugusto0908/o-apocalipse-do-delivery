@@ -26,7 +26,10 @@ const criarGatewayPagamentoPadrao = () => {
   const url = process.env.GATEWAY_URL;
 
   if (url) {
-    return new GatewayPagamentoHttp({ baseUrl: url });
+    return new GatewayPagamentoHttp({
+      baseUrl: url,
+      timeoutMs: obterNumeroAmbiente('GATEWAY_HTTP_TIMEOUT_MS', 3000)
+    });
   }
 
   return criarGatewayPagamentoMock();
@@ -99,7 +102,16 @@ const criarCacheStorePadrao = () => {
 
   // require tardio: o pacote 'redis' so e necessario em homologacao/producao.
   const { createClient } = require('redis');
-  const client = createClient({ url });
+  const client = createClient({
+    url,
+    // fail-fast: se o no de cache cair, os comandos rejeitam na hora e o
+    // CacheService degrada para a fonte, em vez de pendurar a requisicao.
+    disableOfflineQueue: true,
+    socket: {
+      connectTimeout: 1000,
+      reconnectStrategy: (tentativas) => Math.min(tentativas * 100, 2000)
+    }
+  });
   client.on('error', (erro) => console.error('Redis indisponivel:', erro.message));
   client.connect().catch((erro) => console.error('Falha ao conectar no Redis:', erro.message));
 
@@ -207,7 +219,7 @@ const createApp = ({
   carregarCatalogo = carregarCatalogoDoBanco
 } = {}) => {
   const app = express();
-  app.use(express.json());
+  app.use(express.json({ limit: '16kb' }));
 
   registrarRotasCheckout(app, { checkoutService, bulkhead, cacheService, carregarCatalogo });
   registrarRotasOperacionais(app, cacheService);

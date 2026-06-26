@@ -7,15 +7,23 @@
     "test": "jest --runInBand",
     "test:mutation": "stryker run",
     "start": "node src/server.js",
-    "start:gateway-slow": "node src/server.js",
+    "start:gateway-stub": "node src/gateway-stub/server.js",
     "perf:load": "k6 run tests/performance/black-friday-load.js",
     "perf:stress": "k6 run tests/performance/black-friday-stress.js",
     "perf:herd": "k6 run tests/performance/thundering-herd-cache-flush.js",
     "perf:herd:local": "k6 run -e HERD_VUS=100 tests/performance/thundering-herd-cache-flush.js",
-    "perf:gateway-slow": "k6 run tests/performance/gateway-lento-5000ms.js"
+    "perf:gateway-slow": "k6 run tests/performance/gateway-lento-5000ms.js",
+    "chaos:up": "docker compose up -d --build",
+    "chaos:down": "docker compose down -v",
+    "chaos:gateway-slow": "node chaos/toxics.js gateway-slow",
+    "chaos:gateway-reset": "node chaos/toxics.js gateway-reset",
+    "chaos:cache-down": "node chaos/toxics.js cache-down",
+    "chaos:cache-up": "node chaos/toxics.js cache-up",
+    "chaos:reset": "node chaos/toxics.js reset-all"
   },
   "dependencies": {
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "redis": "^4.7.1"
   },
   "devDependencies": {
     "@stryker-mutator/core": "^9.6.1",

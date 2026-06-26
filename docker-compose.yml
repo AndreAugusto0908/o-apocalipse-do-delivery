@@ -1,0 +1,60 @@
+# Ambiente de homologacao para a Fase 4 (Engenharia do Caos).
+# A aplicacao fala com o gateway e com o Redis SEMPRE atraves do Toxiproxy,
+# permitindo injetar latencia/queda na rede sem tocar no codigo.
+#
+#   app ──> toxiproxy:8666 ──> gateway-stub:9000   (proxy "gateway")
+#   app ──> toxiproxy:6669 ──> redis:6379          (proxy "redis")
+#
+# Subir:   docker compose up -d --build
+# Caos:    npm run chaos:gateway-slow   |   npm run chaos:cache-down
+# Resetar: npm run chaos:reset
+
+services:
+  app:
+    build: .
+    command: node src/server.js
+    environment:
+      - PORT=3000
+      - GATEWAY_URL=http://toxiproxy:8666
+      - REDIS_URL=redis://toxiproxy:6669
+      - CHECKOUT_TIMEOUT_MS=2000
+      - CHECKOUT_MAX_RETRIES=3
+      - CHECKOUT_RETRY_DELAY_MS=500
+      - CHECKOUT_CB_MIN_REQUESTS=20
+      - CHECKOUT_CB_THRESHOLD=0.5
+      - CHECKOUT_CB_RESET_MS=10000
+      - CHECKOUT_BULKHEAD_MAX=200
+      - CHECKOUT_BULKHEAD_QUEUE=200
+      - CATALOGO_LATENCY_MS=400
+    ports:
+      - "3000:3000"
+    depends_on:
+      - toxiproxy
+      - gateway-stub
+      - redis
+
+  gateway-stub:
+    build: .
+    command: node src/gateway-stub/server.js
+    environment:
+      - PORT=9000
+    expose:
+      - "9000"
+
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.9.0
+    command: -host 0.0.0.0 -config /toxiproxy/config.json
+    volumes:
+      - ./infra/toxiproxy/config.json:/toxiproxy/config.json:ro
+    ports:
+      - "8474:8474"
+      - "8666:8666"
+      - "6669:6669"
+    depends_on:
+      - gateway-stub
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    expose:
+      - "6379"

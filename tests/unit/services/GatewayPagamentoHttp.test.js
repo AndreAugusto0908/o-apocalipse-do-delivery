@@ -36,4 +36,27 @@ describe('GatewayPagamentoHttp', () => {
 
     await expect(gateway.cobrar(100, {}, 'idem-1')).rejects.toThrow('GATEWAY_HTTP_503');
   });
+
+  test('passa um AbortSignal para o fetch', async () => {
+    const fetchImpl = jest.fn().mockResolvedValue(respostaFake({ body: { status: 'APROVADO' } }));
+    const gateway = new GatewayPagamentoHttp({ baseUrl: 'http://gw:9000', fetchImpl });
+
+    await gateway.cobrar(100, {}, 'idem-1');
+
+    const [, init] = fetchImpl.mock.calls[0];
+    expect(init.signal).toBeDefined();
+  });
+
+  test('aborta a requisicao e fecha o socket quando excede o timeout', async () => {
+    const fetchImpl = jest.fn((url, init) => new Promise((resolve, reject) => {
+      init.signal.addEventListener('abort', () => {
+        const erro = new Error('The operation was aborted');
+        erro.name = 'AbortError';
+        reject(erro);
+      });
+    }));
+    const gateway = new GatewayPagamentoHttp({ baseUrl: 'http://gw:9000', fetchImpl, timeoutMs: 20 });
+
+    await expect(gateway.cobrar(100, {}, 'idem-1')).rejects.toThrow('GATEWAY_TIMEOUT');
+  });
 });
