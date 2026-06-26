@@ -3,6 +3,7 @@ const { randomUUID } = require('crypto');
 const { CheckoutService } = require('./services/CheckoutService');
 const { CircuitBreaker } = require('./services/CircuitBreaker');
 const { Bulkhead, BulkheadCheioError } = require('./services/Bulkhead');
+const { CacheService, InMemoryCacheStore } = require('./services/CacheService');
 
 const obterNumeroAmbiente = (nome, valorPadrao) => {
   const valor = Number(process.env[nome]);
@@ -65,6 +66,20 @@ const obterOpcoesBulkheadAmbiente = () => ({
 
 const criarBulkheadPadrao = () => new Bulkhead(obterOpcoesBulkheadAmbiente());
 
+const obterLatenciaCatalogoMs = () => obterNumeroAmbiente('CATALOGO_LATENCY_MS', 0);
+
+// Simula a leitura de configuracao/catalogo da loja no banco (fonte lenta).
+// E o alvo do Thundering Herd: quando o cache e invalidado, milhares de
+// requisicoes tentariam ler daqui ao mesmo tempo.
+const carregarCatalogoDoBanco = () => new Promise((resolve) => {
+  setTimeout(() => resolve({ loja: 'EntregasJa', aberta: true }), obterLatenciaCatalogoMs());
+});
+
+const criarCacheServicePadrao = () => new CacheService({
+  store: new InMemoryCacheStore(),
+  ttlMs: obterNumeroAmbiente('CATALOGO_CACHE_TTL_MS', 30000)
+});
+
 const criarCheckoutServicePadrao = () => new CheckoutService({
   gatewayPagamento: criarGatewayPagamentoMock(),
   pedidoRepository: criarPedidoRepositoryMock(),
@@ -121,7 +136,7 @@ const responderResultadoCheckout = (res, resultado) => {
   return respostaCheckoutNaoProcessado(res);
 };
 
-const registrarRotasCheckout = (app, checkoutService, bulkhead) => {
+const registrarRotasCheckout = (app, { checkoutService, bulkhead, cacheService, carregarCatalogo }) => {
   app.post('/api/v1/checkout', async (req, res) => {
     if (!pedidoValido(req.body)) {
       return res.status(400).json({ erro: 'Dados incompletos para checkout' });
@@ -130,7 +145,12 @@ const registrarRotasCheckout = (app, checkoutService, bulkhead) => {
     const pedido = criarPedidoCheckout(req.body);
 
     try {
-      const resultado = await bulkhead.executar(() => checkoutService.processar(pedido));
+      const resultado = await bulkhead.executar(async () => {
+        // Read-through: consulta o catalogo via cache (single-flight + fallback).
+        // Sob Thundering Herd, isto protege o banco da manada.
+        await cacheService.obter('catalogo:loja', carregarCatalogo);
+        return checkoutService.processar(pedido);
+      });
       return responderResultadoCheckout(res, resultado);
     } catch (error) {
       if (error instanceof BulkheadCheioError) {
@@ -141,22 +161,25 @@ const registrarRotasCheckout = (app, checkoutService, bulkhead) => {
   });
 };
 
-const registrarRotasOperacionais = (app) => {
-  app.post('/api/v1/cache/flush', (req, res) => {
+const registrarRotasOperacionais = (app, cacheService) => {
+  app.post('/api/v1/cache/flush', async (req, res) => {
     console.log('CACHE LIMPO ABRUPTAMENTE!');
+    await cacheService.flush();
     res.json({ status: 'cache_invalidated' });
   });
 };
 
 const createApp = ({
   checkoutService = criarCheckoutServicePadrao(),
-  bulkhead = criarBulkheadPadrao()
+  bulkhead = criarBulkheadPadrao(),
+  cacheService = criarCacheServicePadrao(),
+  carregarCatalogo = carregarCatalogoDoBanco
 } = {}) => {
   const app = express();
   app.use(express.json());
 
-  registrarRotasCheckout(app, checkoutService, bulkhead);
-  registrarRotasOperacionais(app);
+  registrarRotasCheckout(app, { checkoutService, bulkhead, cacheService, carregarCatalogo });
+  registrarRotasOperacionais(app, cacheService);
 
   return app;
 };
@@ -186,7 +209,9 @@ module.exports = {
   criarGatewayPagamentoMock,
   criarCheckoutServicePadrao,
   criarCircuitBreakerPadrao,
-  criarBulkheadPadrao
+  criarBulkheadPadrao,
+  criarCacheServicePadrao,
+  carregarCatalogoDoBanco
 };
 
 
