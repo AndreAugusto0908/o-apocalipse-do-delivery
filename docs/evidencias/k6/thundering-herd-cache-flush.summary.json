@@ -1,0 +1,10 @@
+{
+  "p95_ms": 2100.79,
+  "p99_ms": 2196.93,
+  "avg_ms": 1610.35,
+  "max_ms": 2209.81,
+  "http_req_failed_rate": 0,
+  "checks_rate": 1,
+  "checkout_errors": 0,
+  "cache_flush_errors": 0
+}

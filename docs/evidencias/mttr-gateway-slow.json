@@ -1,0 +1,8 @@
+{
+  "falha": "gateway-slow",
+  "mttd_ms": 4032,
+  "mttr_ms": 3290,
+  "downtime_total_ms": 5292,
+  "sloHealthyMs": 1500,
+  "medidoEm": "2026-06-26T14:19:27.783Z"
+}

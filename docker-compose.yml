@@ -17,9 +17,11 @@ services:
       - PORT=3000
       - GATEWAY_URL=http://toxiproxy:8666
       - REDIS_URL=redis://toxiproxy:6669
-      - CHECKOUT_TIMEOUT_MS=2000
-      - CHECKOUT_MAX_RETRIES=3
-      - CHECKOUT_RETRY_DELAY_MS=500
+      # Tuning de SRE para sobreviver a um gateway lento DENTRO do SLO de 5s:
+      # fail-fast (timeout curto + 1 retry) em vez do default de 2000ms/3 retries.
+      - CHECKOUT_TIMEOUT_MS=1500
+      - CHECKOUT_MAX_RETRIES=1
+      - CHECKOUT_RETRY_DELAY_MS=300
       - CHECKOUT_CB_MIN_REQUESTS=20
       - CHECKOUT_CB_THRESHOLD=0.5
       - CHECKOUT_CB_RESET_MS=10000
@@ -43,9 +45,9 @@ services:
 
   toxiproxy:
     image: ghcr.io/shopify/toxiproxy:2.9.0
-    command: -host 0.0.0.0 -config /toxiproxy/config.json
+    command: -host 0.0.0.0 -config /config/config.json
     volumes:
-      - ./infra/toxiproxy/config.json:/toxiproxy/config.json:ro
+      - ./infra/toxiproxy:/config:ro
     ports:
       - "8474:8474"
       - "8666:8666"

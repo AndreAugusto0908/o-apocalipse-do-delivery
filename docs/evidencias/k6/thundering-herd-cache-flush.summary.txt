@@ -1,0 +1,8 @@
+=== Cenario k6: thundering-herd-cache-flush ===
+p95 latencia:        2100.79 ms (SLO < 5000 ms)
+p99 latencia:        2196.93 ms
+latencia media:      1610.35 ms
+http_req_failed:     0 (SLO < 0.05)
+checks aprovados:    1
+checkout_errors: 0
+cache_flush_errors: 0
