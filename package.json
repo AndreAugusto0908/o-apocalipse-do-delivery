@@ -19,7 +19,9 @@
     "chaos:gateway-reset": "node chaos/toxics.js gateway-reset",
     "chaos:cache-down": "node chaos/toxics.js cache-down",
     "chaos:cache-up": "node chaos/toxics.js cache-up",
-    "chaos:reset": "node chaos/toxics.js reset-all"
+    "chaos:reset": "node chaos/toxics.js reset-all",
+    "chaos:mttr": "node chaos/mttr.js gateway-slow",
+    "chaos:mttr:cache": "node chaos/mttr.js cache-down"
   },
   "dependencies": {
     "express": "^4.19.2",

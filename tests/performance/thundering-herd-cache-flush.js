@@ -1,6 +1,7 @@
 import http from 'k6/http';
 import { check } from 'k6';
 import { Rate } from 'k6/metrics';
+import { gerarHandleSummary } from './lib/summary.js';
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:3000';
 const HERD_VUS = Number(__ENV.HERD_VUS || 10000);
@@ -26,6 +27,7 @@ export const options = {
 };
 
 export function setup() {
+  // Invalida o cache de verdade (FLUSHDB no Redis) imediatamente antes da manada.
   const response = http.post(`${BASE_URL}/api/v1/cache/flush`, null, {
     tags: { endpoint: 'cache-flush' }
   });
@@ -54,6 +56,8 @@ export default function () {
     tags: { endpoint: 'checkout-after-cache-flush' }
   });
 
+  // Sobreviver ao herd depende do single-flight no cache (uma so leitura ao
+  // banco) + backoff com jitter no gateway (retentativas nao voltam juntas).
   const ok = check(response, {
     'checkout sobrevive ao thundering herd': (res) => res.status === 200,
     'checkout herd abaixo de 5s': (res) => res.timings.duration < 5000
@@ -61,3 +65,5 @@ export default function () {
 
   checkoutErrors.add(!ok);
 }
+
+export const handleSummary = gerarHandleSummary('thundering-herd-cache-flush');
