@@ -15,6 +15,13 @@ describe('RedisCacheStore', () => {
     expect(await store.get('k')).toBeNull();
   });
 
+  test('get retorna null quando o client devolve undefined', async () => {
+    const client = { get: jest.fn().mockResolvedValue(undefined) };
+    const store = new RedisCacheStore({ client });
+
+    expect(await store.get('k')).toBeNull();
+  });
+
   test('set grava JSON com expiracao em milissegundos (PX)', async () => {
     const client = { set: jest.fn().mockResolvedValue('OK') };
     const store = new RedisCacheStore({ client });

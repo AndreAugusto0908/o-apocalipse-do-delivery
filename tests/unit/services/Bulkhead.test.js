@@ -67,4 +67,11 @@ describe('Bulkhead', () => {
     expect(bulk.emExecucaoAtual).toBe(0);
     await expect(bulk.executar(() => Promise.resolve('ok'))).resolves.toBe('ok');
   });
+
+  test('BulkheadCheioError carrega nome e mensagem descritivos', () => {
+    const erro = new BulkheadCheioError();
+
+    expect(erro.name).toBe('BulkheadCheioError');
+    expect(erro.message).toContain('Bulkhead cheio');
+  });
 });

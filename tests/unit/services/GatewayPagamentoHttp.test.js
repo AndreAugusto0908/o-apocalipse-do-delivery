@@ -59,4 +59,25 @@ describe('GatewayPagamentoHttp', () => {
 
     await expect(gateway.cobrar(100, {}, 'idem-1')).rejects.toThrow('GATEWAY_TIMEOUT');
   });
+
+  test('envia Content-Type application/json e o corpo serializado', async () => {
+    const fetchImpl = jest.fn().mockResolvedValue(respostaFake({ body: { status: 'APROVADO' } }));
+    const gateway = new GatewayPagamentoHttp({ baseUrl: 'http://gw:9000', fetchImpl });
+
+    await gateway.cobrar(100, { numero: '4111' }, 'idem-1');
+
+    const [, init] = fetchImpl.mock.calls[0];
+    expect(init.headers['Content-Type']).toBe('application/json');
+    expect(init.body).toBe(JSON.stringify({ valor: 100, cartao: { numero: '4111' } }));
+  });
+
+  test('usa header de idempotencia vazio quando a chave e ausente', async () => {
+    const fetchImpl = jest.fn().mockResolvedValue(respostaFake({ body: { status: 'APROVADO' } }));
+    const gateway = new GatewayPagamentoHttp({ baseUrl: 'http://gw:9000', fetchImpl });
+
+    await gateway.cobrar(100, {});
+
+    const [, init] = fetchImpl.mock.calls[0];
+    expect(init.headers['Idempotency-Key']).toBe('');
+  });
 });

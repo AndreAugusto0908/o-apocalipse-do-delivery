@@ -28,6 +28,24 @@ describe('InMemoryCacheStore', () => {
     relogio.avancar(1000);
     expect(await store.get('k')).toBeNull();
   });
+
+  test('retorna null para chave inexistente', async () => {
+    const store = new InMemoryCacheStore();
+
+    expect(await store.get('nao-existe')).toBeNull();
+  });
+
+  test('mantem o item ate o instante exato da expiracao', async () => {
+    const relogio = criarRelogio();
+    const store = new InMemoryCacheStore({ now: relogio });
+
+    await store.set('k', 'v', 1000);
+    relogio.avancar(999);
+    expect(await store.get('k')).toBe('v');
+
+    relogio.avancar(1);
+    expect(await store.get('k')).toBeNull();
+  });
 });
 
 describe('CacheService', () => {
@@ -75,11 +93,15 @@ describe('CacheService', () => {
     };
     const cache = new CacheService({ store });
     const fonte = jest.fn().mockResolvedValue('fonte');
+    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
     const v = await cache.obter('k', fonte);
 
     expect(v).toBe('fonte');
     expect(fonte).toHaveBeenCalledTimes(1);
+    expect(erroSpy).toHaveBeenCalled();
+
+    erroSpy.mockRestore();
   });
 
   test('aplica TTL com jitter ao gravar no store', async () => {
@@ -89,5 +111,44 @@ describe('CacheService', () => {
     await cache.obter('k', jest.fn().mockResolvedValue('v'));
 
     expect(store.set).toHaveBeenCalledWith('k', 'v', 1200);
+  });
+
+  test('carrega da fonte quando o store retorna undefined (nao trata como hit)', async () => {
+    const store = { get: jest.fn().mockResolvedValue(undefined), set: jest.fn(), flush: jest.fn() };
+    const cache = new CacheService({ store });
+    const fonte = jest.fn().mockResolvedValue('fonte');
+
+    const v = await cache.obter('k', fonte);
+
+    expect(v).toBe('fonte');
+    expect(fonte).toHaveBeenCalledTimes(1);
+  });
+
+  test('flush degrada graciosamente quando o store falha', async () => {
+    const store = { get: jest.fn(), set: jest.fn(), flush: jest.fn().mockRejectedValue(new Error('redis down')) };
+    const cache = new CacheService({ store });
+    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(cache.flush()).resolves.toBeUndefined();
+    expect(erroSpy).toHaveBeenCalled();
+
+    erroSpy.mockRestore();
+  });
+
+  test('mantem o valor mesmo quando a escrita no store falha', async () => {
+    const store = {
+      get: jest.fn().mockResolvedValue(null),
+      set: jest.fn().mockRejectedValue(new Error('redis down')),
+      flush: jest.fn()
+    };
+    const cache = new CacheService({ store });
+    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const v = await cache.obter('k', jest.fn().mockResolvedValue('v'));
+
+    expect(v).toBe('v');
+    expect(erroSpy).toHaveBeenCalled();
+
+    erroSpy.mockRestore();
   });
 });

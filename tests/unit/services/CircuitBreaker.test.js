@@ -17,6 +17,15 @@ describe('CircuitBreaker', () => {
     expect(cb.estadoAtual).toBe('FECHADO');
   });
 
+  test('abre usando o threshold padrao (0.5) quando nenhum e informado', () => {
+    const cb = new CircuitBreaker({ minimumRequests: 2 });
+
+    cb.registrarFalha();
+    cb.registrarFalha();
+
+    expect(cb.isOpen()).toBe(true);
+  });
+
   test('nao abre antes de atingir o volume minimo de requisicoes', () => {
     const cb = new CircuitBreaker({ minimumRequests: 5, threshold: 0.5 });
 

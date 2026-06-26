@@ -6,6 +6,9 @@ const { Bulkhead, BulkheadCheioError } = require('./services/Bulkhead');
 const { CacheService, InMemoryCacheStore, RedisCacheStore } = require('./services/CacheService');
 const { GatewayPagamentoHttp } = require('./services/GatewayPagamentoHttp');
 
+// Stryker disable all: composition root - leitura de ambiente, selecao de
+// adaptadores e doubles em processo (wiring), fora da regra de negocio testada.
+// A logica de negocio (validacao, respostas, rotas) abaixo segue mutada.
 const obterNumeroAmbiente = (nome, valorPadrao) => {
   const valor = Number(process.env[nome]);
 
@@ -132,6 +135,7 @@ const criarCheckoutServicePadrao = () => new CheckoutService({
   circuitBreaker: criarCircuitBreakerPadrao()
 });
 
+// Stryker restore all
 const cartaoValido = (cartao) => (
   cartao
   && typeof cartao === 'object'
@@ -244,6 +248,7 @@ module.exports = {
   startServer,
   pedidoValido,
   cartaoValido,
+  checkoutProcessado,
   criarPedidoCheckout,
   obterLatenciaGatewayMs,
   obterOpcoesCheckoutAmbiente,

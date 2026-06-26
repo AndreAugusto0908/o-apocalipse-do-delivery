@@ -1,17 +1,15 @@
 // Cliente HTTP do gateway de pagamento.
 // Em homologacao, as chamadas passam por um proxy Toxiproxy, que injeta
 // latencia/queda na rede sem alterar o codigo da aplicacao.
+//
+// PCI/seguranca: dados de cartao em transito EXIGEM TLS. Em producao, GATEWAY_URL
+// deve usar https://. O http:// e aceito apenas no ambiente simulado (rede
+// interna do docker-compose via Toxiproxy). Ver secao de seguranca no README.
 class GatewayPagamentoHttp {
   constructor({ baseUrl, fetchImpl = fetch, timeoutMs = 3000 }) {
     this.baseUrl = baseUrl;
     this.fetchImpl = fetchImpl;
     this.timeoutMs = timeoutMs;
-
-    // PCI: dados de cartao em transito exigem TLS em producao. O http:// e
-    // aceito apenas para o ambiente simulado (Toxiproxy/rede interna do compose).
-    if (process.env.NODE_ENV === 'production' && baseUrl && baseUrl.startsWith('http://')) {
-      console.warn('GatewayPagamentoHttp: GATEWAY_URL sem TLS em producao - use https para proteger dados de cartao.');
-    }
   }
 
   async cobrar(valor, cartao, idempotencyKey) {

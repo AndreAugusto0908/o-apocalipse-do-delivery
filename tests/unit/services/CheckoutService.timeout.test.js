@@ -11,6 +11,7 @@ const repositorioQueTrava = () => ({
 
 describe('CheckoutService - timeout em todas as chamadas externas', () => {
   test('nao trava quando o repositorio nao responde ao salvar erro de gateway', async () => {
+    const erroSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     const { service } = montarCheckout({
       gatewayPagamento: GatewayPagamentoStub.sempreIndisponivel(),
       pedidoRepository: repositorioQueTrava(),
@@ -20,6 +21,12 @@ describe('CheckoutService - timeout em todas as chamadas externas', () => {
     const resultado = await service.processar(PedidoMother.valido());
 
     expect(resultado).toBeNull();
+    expect(erroSpy).toHaveBeenCalledWith(
+      'Falha ao persistir status de erro do pedido:',
+      'TIMEOUT_REPOSITORIO'
+    );
+
+    erroSpy.mockRestore();
   }, 1500);
 
   test('aplica timeout no salvar do pedido aprovado e degrada para fallback sem enviar e-mail', async () => {
