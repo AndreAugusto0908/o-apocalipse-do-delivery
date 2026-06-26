@@ -6,7 +6,7 @@ on:
 
 jobs:
   test:
-    name: Unit and mutation tests
+    name: Unit, BDD and mutation tests
     runs-on: ubuntu-latest
 
     steps:
@@ -24,6 +24,9 @@ jobs:
 
       - name: Run unit and integration tests
         run: npm test
+
+      - name: Run BDD scenarios (Cucumber)
+        run: npm run test:bdd
 
       - name: Run mutation tests
         run: npm run test:mutation
