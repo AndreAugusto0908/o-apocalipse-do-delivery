@@ -34,9 +34,9 @@ falha e mede a recuperacao.
 
 | Metrica | Valor |
 | :--- | ---: |
-| MTTD (tempo ate detectar a degradacao) | **4032 ms** |
-| **MTTR (tempo ate recuperar apos remover a falha)** | **3290 ms** |
-| Downtime total (deteccao &rarr; recuperacao) | 5292 ms |
+| MTTD (tempo ate detectar a degradacao) | **4105 ms** |
+| **MTTR (tempo ate recuperar apos remover a falha)** | **3310 ms** |
+| Downtime total (deteccao &rarr; recuperacao) | 5313 ms |
 
 Arquivo: `docs/evidencias/mttr-gateway-slow.json`.
 

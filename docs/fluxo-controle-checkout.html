@@ -29,18 +29,16 @@
   <div class="mermaid">
 flowchart TD
   A([Inicio: processar pedido]) --> B{"gatewayIndisponivel? (circuit breaker aberto)"}
-  B -- sim --> Z1["registrarErroGateway: status ERRO_GATEWAY + persiste"]
-  Z1 --> R1([retorna null - HTTP 500])
-  B -- nao --> C["resposta = cobrarComResiliencia(pedido): timeout + retry + backoff com jitter"]
+  B -- sim --> ERRO["registrarErroGateway: status ERRO_GATEWAY + persiste"]
+  B -- nao --> C["cobrarComResiliencia: timeout + retry + backoff com jitter"]
   C --> D{"resposta nula? (retentativas esgotadas)"}
-  D -- sim --> Z2["registrarErroGateway"]
-  Z2 --> R2([retorna null - HTTP 500])
-  D -- nao --> E["try: processarResultadoPagamento - handler por status (Aprovado/Recusado)"]
-  E --> F{"excecao ao persistir/finalizar?"}
-  F -- sim --> Z3["catch: registrarErroGateway"]
-  Z3 --> R3([retorna null - HTTP 500])
-  F -- nao --> R4([retorna pedido - PROCESSADO ou FALHOU])
-  </div>
+  D -- sim --> ERRO
+  D -- nao --> E{"excecao ao processar resultado / persistir?"}
+  E -- sim --> ERRO
+  E -- nao --> OK["processarResultadoPagamento: PROCESSADO ou FALHOU"]
+  ERRO --> FIM([Fim: retorno do metodo - resposta HTTP])
+  OK --> FIM
+</div>
 
   <h2>Calculo da Complexidade Ciclomatica V(G)</h2>
   <p>Escopo medido: o corpo do metodo <code>processar</code> (os helpers que ele
@@ -57,8 +55,10 @@ flowchart TD
   <p>
     <strong>Por predicados:</strong> V(G) = predicados + 1 = 3 + 1 = <strong>4</strong><br />
     <strong>Por regioes:</strong> o grafo delimita 4 regioes fechadas = <strong>4</strong><br />
-    <strong>Por arestas/nos:</strong> com 11 nos e 13 arestas (1 componente),
-    V(G) = E &minus; N + 2P = 13 &minus; 11 + 2 = <strong>4</strong>
+    <strong>Por arestas/nos:</strong> o grafo (entrada unica A, saida unica FIM,
+    no ERRO compartilhado pelos 3 caminhos de falha) tem <strong>8 nos</strong> e
+    <strong>10 arestas</strong> (1 componente):
+    V(G) = E &minus; N + 2P = 10 &minus; 8 + 2 = <strong>4</strong>
   </p>
 
   <h2>Caminhos independentes (minimo a cobrir)</h2>

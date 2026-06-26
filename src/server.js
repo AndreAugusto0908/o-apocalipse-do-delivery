@@ -19,6 +19,7 @@ const obterLatenciaGatewayMs = () => obterNumeroAmbiente('GATEWAY_LATENCY_MS', 3
 
 const obterOpcoesCheckoutAmbiente = () => ({
   timeoutMs: obterNumeroAmbiente('CHECKOUT_TIMEOUT_MS', 2000),
+  repoTimeoutMs: obterNumeroAmbiente('CHECKOUT_REPO_TIMEOUT_MS', obterNumeroAmbiente('CHECKOUT_TIMEOUT_MS', 2000)),
   maxRetries: obterNumeroAmbiente('CHECKOUT_MAX_RETRIES', 3),
   retryDelayMs: obterNumeroAmbiente('CHECKOUT_RETRY_DELAY_MS', 500)
 });
