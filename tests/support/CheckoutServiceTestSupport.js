@@ -14,16 +14,38 @@ class PedidoBuilder {
     };
   }
 
+  comEmail(clienteEmail) {
+    this.pedido.clienteEmail = clienteEmail;
+    return this;
+  }
+
+  comValor(valor) {
+    this.pedido.valor = valor;
+    return this;
+  }
+
+  comCartao(cartao) {
+    this.pedido.cartao = cartao;
+    return this;
+  }
+
+  semCartao() {
+    this.pedido.cartao = undefined;
+    return this;
+  }
+
   build() {
     return {
       ...this.pedido,
-      cartao: { ...this.pedido.cartao }
+      cartao: this.pedido.cartao ? { ...this.pedido.cartao } : undefined
     };
   }
 }
 
 const PedidoMother = {
-  valido: () => new PedidoBuilder().build()
+  valido: () => new PedidoBuilder().build(),
+  comValor: (valor) => new PedidoBuilder().comValor(valor).build(),
+  semCartao: () => new PedidoBuilder().semCartao().build()
 };
 
 const GatewayPagamentoStub = {

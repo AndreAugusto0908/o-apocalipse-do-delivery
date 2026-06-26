@@ -1,0 +1,7 @@
+=== Cenario k6: black-friday-load ===
+p95 latencia:        52.75 ms (SLO < 5000 ms)
+p99 latencia:        338.97 ms
+latencia media:      22.46 ms
+http_req_failed:     0 (SLO < 0.05)
+checks aprovados:    1
+checkout_errors: 0

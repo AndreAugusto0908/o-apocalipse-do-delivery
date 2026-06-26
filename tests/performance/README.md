@@ -1,120 +1,102 @@
-# Testes de desempenho - Fase 4 SRE
+# Testes de desempenho e caos - Fase 4 SRE
 
-Esta pasta contem scripts k6 para validar o checkout em um ambiente de homologacao simulado, usando volumetria inspirada em Black Friday.
+Scripts k6 + injecao de falhas via **Toxiproxy** para validar o checkout em um
+ambiente de homologacao realista (`docker-compose`), com volumetria inspirada na
+Black Friday.
 
-## SLI/SLO definidos
+## SLI/SLO
 
-| Indicador | SLI medido | SLO obrigatorio |
+| Indicador | SLI medido | SLO |
 | :--- | :--- | :--- |
-| Latencia | `http_req_duration` no percentil 95 | `p95 < 5000 ms` |
-| Erro HTTP | `http_req_failed` | taxa de erro `< 5%` |
-| Erro funcional do checkout | `checkout_errors` | taxa de erro `< 5%` |
+| Latencia p95 | `http_req_duration` p(95) | `< 5000 ms` |
+| Erro HTTP de transporte/colapso | `http_req_failed` | `< 5%` |
+| Erro funcional do checkout | `checkout_errors` | `< 5%` |
+| Erro do flush de cache | `cache_flush_errors` | `< 1%` |
 
-## Scripts
+> Os SLOs sao `thresholds` reais do k6: se violados, a execucao retorna codigo
+> de saida diferente de zero e falha o pipeline.
 
-| Script | Objetivo | Perfil |
-| :--- | :--- | :--- |
-| `black-friday-load.js` | Teste de carga nominal | ramp-up para 25 VUs, steady de 1 minuto, ramp-down |
-| `black-friday-stress.js` | Teste de estresse progressivo | ramp-up ate 100 VUs para observar degradacao |
+## Scripts e volumetria (parametrizavel por ambiente)
 
-## Como executar
+| Script | Objetivo | Volumetria padrao | Variavel |
+| :--- | :--- | :--- | :--- |
+| `black-friday-load.js` | Carga nominal | ramp ate 200 VUs, 2 min steady | `LOAD_VUS` |
+| `black-friday-stress.js` | Estresse progressivo | ramp ate 500 VUs | `STRESS_VUS` |
+| `gateway-lento-5000ms.js` | Gateway lento (resiliencia) | 50 VUs | `GATEWAY_VUS` |
+| `thundering-herd-cache-flush.js` | Manada apos flush de cache | 10.000 VUs | `HERD_VUS` |
 
-Em um terminal, suba a aplicacao:
+Cada script gera evidencia commitavel em `docs/evidencias/k6/<nome>.summary.{json,txt}`
+via `handleSummary`.
+
+## Subir o ambiente de caos
 
 ```bash
-npm start
+npm run chaos:up        # docker compose: app + Toxiproxy + Redis + gateway-stub
 ```
 
-Em outro terminal, execute o teste desejado:
+A aplicacao fala com o gateway e com o Redis **sempre atraves do Toxiproxy**, o
+que permite injetar latencia/queda na rede sem alterar o codigo:
+
+```
+app ──> toxiproxy:8666 ──> gateway-stub   (proxy "gateway")
+app ──> toxiproxy:6669 ──> redis          (proxy "redis")
+```
+
+## Cenarios de caso de uso
+
+### 1. Carga / estresse nominal
 
 ```bash
 npm run perf:load
 npm run perf:stress
 ```
 
-Para apontar para outro ambiente:
+### 2. Gateway lento (5000 ms) — degradacao graciosa
+
+A latencia NAO e simulada no codigo: e injetada na rede pelo Toxiproxy.
 
 ```bash
-BASE_URL=http://localhost:3000 npm run perf:load
+npm run chaos:gateway-slow   # injeta +5000ms na chamada do gateway
+npm run perf:gateway-slow    # k6 mede o comportamento
+npm run chaos:gateway-reset  # remove a latencia
 ```
 
-No PowerShell:
+Esperado: o checkout nao espera os 5000 ms. Com timeout (2000 ms), retry
+limitado, circuit breaker e fallback, responde 200 (sucesso) ou 500 (fallback
+controlado) sempre abaixo de 5 s. Apenas 502/503/504/timeout de transporte
+contam como `http_req_failed`.
 
-```powershell
-$env:BASE_URL='http://localhost:3000'; npm run perf:load
-```
-
-A execucao falha automaticamente se qualquer threshold de SLO for violado.
-
-## Injecao de falha: Thundering Herd apos flush de cache
-
-O script `thundering-herd-cache-flush.js` simula o desastre de **Thundering Herd**:
-
-1. executa `POST /api/v1/cache/flush` para invalidar o cache;
-2. dispara uma manada de checkouts simultaneos;
-3. valida se a aplicacao permanece dentro dos SLOs de latencia e erro.
-
-Por padrao, o script usa **10.000 VUs**, cada um executando uma requisicao de checkout:
+### 3. Thundering Herd — flush de cache + manada
 
 ```bash
-npm run perf:herd
+npm run perf:herd        # 10.000 VUs; faz FLUSHDB real e dispara a manada
+npm run perf:herd:local  # rodada local reduzida (100 VUs)
 ```
 
-Para uma rodada local menor:
-
-```powershell
-npm run perf:herd:local
-```
-
-SLIs/SLOs do desastre:
-
-| Indicador | SLI medido | SLO |
-| :--- | :--- | :--- |
-| Latencia p95 | `http_req_duration` | `< 5000 ms` |
-| Erro HTTP | `http_req_failed` | `< 5%` |
-| Erro funcional do checkout | `checkout_errors` | `< 5%` |
-| Erro do flush de cache | `cache_flush_errors` | `< 1%` |
-
-A protecao contra efeito cascata no codigo fica no `CheckoutService`: retry limitado, timeout curto, circuit breaker, fallback controlado e backoff exponencial com jitter entre tentativas de gateway.
-
-Para sobrescrever manualmente com k6 direto:
-
-`ash
-k6 run -e HERD_VUS=500 tests/performance/thundering-herd-cache-flush.js
-` 
-
-
-
-## Injecao de falha: Gateway lento com 5000 ms
-
-O script `gateway-lento-5000ms.js` valida o comportamento quando a API de pagamento parceira passa a responder com 5000 ms de latencia.
-
-Para simular a falha, suba a aplicacao com a variavel de ambiente:
-
-```powershell
-$env:GATEWAY_LATENCY_MS='5000'; $env:CHECKOUT_TIMEOUT_MS='1000'; $env:CHECKOUT_MAX_RETRIES='1'; $env:CHECKOUT_RETRY_DELAY_MS='100'; npm start
-```
-
-Em outro terminal, execute:
+Tambem e possivel derrubar o no de cache pela rede:
 
 ```bash
-npm run perf:gateway-slow
+npm run chaos:cache-down  # desabilita o proxy do Redis (no de cache "cai")
+npm run chaos:cache-up    # religa
 ```
 
-SLOs do desastre:
+Sobrevivencia garantida por: **single-flight** no cache (uma so leitura ao banco
+por chave) + **backoff exponencial com jitter** no gateway (as retentativas nao
+voltam todas ao mesmo tempo) + degradacao graciosa quando o Redis cai.
 
-| Indicador | SLI medido | SLO |
-| :--- | :--- | :--- |
-| Fallback controlado | HTTP 500 com mensagem amigavel | erro funcional `< 5%` |
-| Latencia p95 | `http_req_duration` | `< 5000 ms` |
-| Erro HTTP de transporte | `http_req_failed` | `< 5%` |
+### 4. MTTR (Mean Time To Recovery)
 
-Como o `CheckoutService` possui timeout de 2000 ms e retry limitado, o resultado esperado nao e aguardar os 5000 ms do gateway, mas sim acionar fallback controlado antes do limite de 5 segundos.
+```bash
+npm run chaos:mttr        # gateway lento: injeta, detecta, remove, mede recuperacao
+npm run chaos:mttr:cache  # mesmo experimento para a queda de cache
+```
 
-Evidencia local obtida:
+Gera `docs/evidencias/mttr-<falha>.json` com `mttd_ms`, `mttr_ms` e
+`downtime_total_ms`.
 
-```text
-p95 = 2.14 s
-http_req_failed = 0.00%
-gateway_slow_errors = 0.00%
+## Resetar
+
+```bash
+npm run chaos:reset   # remove todos os toxicos e religa os proxies
+npm run chaos:down    # derruba o ambiente
 ```

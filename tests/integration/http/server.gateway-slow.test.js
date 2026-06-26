@@ -53,6 +53,7 @@ describe('Gateway parceiro lento', () => {
 
     expect(obterOpcoesCheckoutAmbiente()).toEqual({
       timeoutMs: 1000,
+      repoTimeoutMs: 1000,
       maxRetries: 1,
       retryDelayMs: 100
     });

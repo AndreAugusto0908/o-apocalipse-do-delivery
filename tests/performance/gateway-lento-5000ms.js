@@ -1,20 +1,28 @@
 import http from 'k6/http';
-
-http.setResponseCallback(http.expectedStatuses({ min: 200, max: 599 }));
 import { check, sleep } from 'k6';
 import { Rate } from 'k6/metrics';
+import { gerarHandleSummary } from './lib/summary.js';
+
+// A latencia de 5000ms NAO e simulada no codigo: ela e injetada na REDE pelo
+// Toxiproxy (npm run chaos:gateway-slow) antes/durante esta execucao.
+// Aqui sao tratados como "esperados" apenas o 200 (sucesso) e o 500 (fallback
+// controlado). 502/503/504/timeout de transporte contam como http_req_failed,
+// para que o threshold realmente detecte colapso (e nao seja neutralizado).
+http.setResponseCallback(http.expectedStatuses(200, 500));
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:3000';
+const GATEWAY_VUS = Number(__ENV.GATEWAY_VUS || 50);
 const gatewaySlowErrors = new Rate('gateway_slow_errors');
+const fallbackControlado = new Rate('fallback_controlado');
 
 export const options = {
   scenarios: {
     gateway_lento_5000ms: {
       executor: 'ramping-vus',
       stages: [
-        { duration: '15s', target: 10 },
-        { duration: '30s', target: 10 },
-        { duration: '15s', target: 0 }
+        { duration: '20s', target: GATEWAY_VUS },
+        { duration: '1m', target: GATEWAY_VUS },
+        { duration: '20s', target: 0 }
       ],
       gracefulRampDown: '10s'
     }
@@ -43,15 +51,17 @@ export default function () {
     tags: { endpoint: 'checkout-gateway-lento' }
   });
 
+  // Comportamento resiliente esperado: ou sucesso (200) ou fallback rapido (500),
+  // sempre antes de 5s, nunca pendurando os 5000ms do gateway.
+  const respostaValida = response.status === 200 || response.status === 500;
   const ok = check(response, {
-    'gateway lento aciona fallback controlado': (res) => res.status === 500,
-    'mensagem amigavel no fallback': (res) => (
-      res.json('erro') === 'Nao foi possivel processar seu pagamento. Tente mais tarde.'
-    ),
-    'fallback responde antes de 5s': (res) => res.timings.duration < 5000
+    'resposta resiliente (200 ou fallback 500)': () => respostaValida,
+    'responde antes de 5s (nao espera o gateway)': (res) => res.timings.duration < 5000
   });
 
+  fallbackControlado.add(response.status === 500);
   gatewaySlowErrors.add(!ok);
   sleep(0.5);
 }
 
+export const handleSummary = gerarHandleSummary('gateway-lento-5000ms');

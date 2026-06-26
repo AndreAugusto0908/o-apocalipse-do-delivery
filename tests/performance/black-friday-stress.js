@@ -1,8 +1,11 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Rate } from 'k6/metrics';
+import { gerarHandleSummary } from './lib/summary.js';
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:3000';
+const STRESS_VUS = Number(__ENV.STRESS_VUS || 500);
+
 const checkoutErrors = new Rate('checkout_errors');
 
 export const options = {
@@ -10,10 +13,10 @@ export const options = {
     black_friday_checkout_stress: {
       executor: 'ramping-vus',
       stages: [
-        { duration: '30s', target: 25 },
-        { duration: '30s', target: 50 },
-        { duration: '1m', target: 75 },
-        { duration: '30s', target: 100 },
+        { duration: '30s', target: Math.round(STRESS_VUS * 0.25) },
+        { duration: '30s', target: Math.round(STRESS_VUS * 0.5) },
+        { duration: '1m', target: Math.round(STRESS_VUS * 0.75) },
+        { duration: '1m', target: STRESS_VUS },
         { duration: '30s', target: 0 }
       ],
       gracefulRampDown: '15s'
@@ -51,3 +54,5 @@ export default function () {
   checkoutErrors.add(!ok);
   sleep(0.5);
 }
+
+export const handleSummary = gerarHandleSummary('black-friday-stress');

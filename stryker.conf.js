@@ -5,14 +5,15 @@ module.exports = {
   packageManager: 'npm',
   testRunner: 'jest',
   mutate: [
-    'src/**/*.js'
+    'src/**/*.js',
+    '!src/gateway-stub/**/*.js'
   ],
-  reporters: ['clear-text', 'progress', 'html'],
+  reporters: ['clear-text', 'progress', 'html', 'json'],
   coverageAnalysis: 'perTest',
   thresholds: {
     high: 90,
     low: 80,
-    break: 80
+    break: 90
   },
   jest: {
     projectType: 'custom',

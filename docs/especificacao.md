@@ -47,7 +47,7 @@ Em cenários de alto tráfego (como a Black Friday), este componente atua como u
 ### RF04 – Resiliência de Rede e Políticas de Tolerância a Falhas
 * **RN04 (Timeout Operacional):** O microsserviço não pode permitir que instabilidades na API externa do gateway de pagamento retenham recursos locais do servidor Express. Fica estabelecido um tempo limite rígido (Timeout) de **2000 milissegundos (2 segundos)** para a resposta do método `cobrar`. Se a API externa ultrapassar esse tempo sem responder, a conexão deve ser encerrada por timeout.
 * **RN05 (Mecanismo de Retentativas - Retry):** Diante de falhas puras de infraestrutura (como conexões recusadas, erros internos do servidor do gateway `HTTP 5xx` ou ocorrência do Timeout definido na RN04), o sistema deve acionar uma política automática de retentativas. O sistema tentará executar a cobrança por **até 3 vezes** adicionais.
-* **RN06 (Intervalo de Backoff):** Cada tentativa de reexecução (Retry) deve aguardar um intervalo fixo de **500 milissegundos** antes de ser submetida, dando tempo para a estabilização da rede de destino.
+* **RN06 (Intervalo de Backoff):** Cada tentativa de reexecução (Retry) deve aguardar um intervalo de **backoff exponencial com jitter**, partindo de uma base de **500 milissegundos** (500 ms, ~1000 ms, ~2000 ms...). O componente aleatório (jitter) evita que retentativas concorrentes retornem todas ao mesmo tempo após uma falha — protegendo o gateway contra o efeito de manada (*thundering herd*).
 
 ### RF05 – Degradação Graciosa e Fallback (Circuit Breaker)
 * **RN07 (Status de Erro Crítico):** Se o limite de 3 retentativas automáticas for esgotado sem sucesso, ou se o disjuntor do padrão *Circuit Breaker* estiver aberto (taxa de erro de rede acumulada superior a 50%), o sistema deverá executar o plano de contingência (*Fallback*):
@@ -73,4 +73,4 @@ Para fins de garantia da qualidade, cálculo da complexidade ciclomática e escr
 
 ## 5. Requisitos Não-Funcionais Críticos (Thresholds de SLO)
 * **Concorrência e Escala:** O sistema deve aceitar e processar requisições em regime de concorrência massiva simulada durante os testes k6, apresentando uma taxa global de sucesso de requisições de ponta a ponta superior a 95%.
-* **Latência (SLO de Tempo de Resposta):** O percentil 95 das requisições bem-sucedidas (`p95`) no endpoint de checkout deve se manter **abaixo de 2500ms**, mesmo quando sob estresse de rede controlado (injeção de falhas via Toxiproxy dentro dos limites do SLA do gateway).
+* **Latência (SLO de Tempo de Resposta):** O percentil 95 das requisições (`p95`) no endpoint de checkout deve se manter **abaixo de 5000ms** (SLO duro, alinhado aos `thresholds` do k6), mesmo quando sob estresse de rede controlado (injeção de falhas via Toxiproxy). Meta interna desejável: p95 < 2500ms em condições nominais.

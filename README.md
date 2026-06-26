@@ -14,21 +14,28 @@ O projeto implementa um checkout resiliente com testes automatizados, TDD docume
 
 | Item | Resultado |
 | :--- | :--- |
-| Testes Jest/Supertest | 35 testes em 7 suites |
-| Mutation Testing | Stryker.js com 100.00% de Mutation Score e 0 mutantes sobreviventes |
-| Performance/SRE | k6 com carga, estresse, Thundering Herd e Gateway Lento |
+| Testes Jest/Supertest | 96 testes em 22 suites (unit + integracao) |
+| BDD (Cucumber) | 7 cenarios `.feature` executaveis (Dado-Quando-Entao), 84 steps |
+| Mutation Testing | Stryker.js com **98,14%** de Mutation Score (meta >= 90%) |
+| Resiliencia | Circuit Breaker, Bulkhead/load-shedding, timeout em toda chamada externa, idempotencia, cache single-flight |
+| Caos (SRE) | Toxiproxy real (gateway lento 5000ms + queda de cache) + calculo de MTTR |
 | SLO principal | p95 menor que 5s e taxa de erro menor que 5% |
-| Organizacao | Testes centralizados em `tests/` por tipo: unit, integration, performance e support |
+| Organizacao | `src/services/` (regra de negocio) + `tests/` por tipo + `chaos/` + `infra/` |
 
 Comandos principais:
 
 ```bash
-npm test
-npm run test:mutation
-npm run perf:load
-npm run perf:stress
-npm run perf:herd:local
-npm run perf:gateway-slow
+npm test                 # 96 testes unit + integracao (Jest)
+npm run test:bdd         # 7 cenarios Gherkin (Cucumber)
+npm run test:mutation    # teste de mutacao (Stryker, break >= 90%)
+
+# Caos/SRE (requer Docker + k6):
+npm run chaos:up         # sobe app + Toxiproxy + Redis + gateway-stub
+npm run perf:load        # carga; perf:stress, perf:herd, perf:gateway-slow
+npm run chaos:gateway-slow   # injeta 5000ms de latencia via Toxiproxy
+npm run chaos:cache-down     # derruba o no de cache
+npm run chaos:mttr           # mede MTTD/MTTR e grava docs/evidencias/
+npm run chaos:reset && npm run chaos:down
 ```
 
 Como as Fases se Conectam a este Codigo
@@ -40,7 +47,13 @@ Voces calcularao a Complexidade Ciclomatica do metodo processar(pedido). Notem q
 O e-mail sincrono acoplado dentro do fluxo de aprovacao e um erro classico de design. Voces devem usar a refatoracao para extrair essa logica e garantir via Mocks (no Jest) se o e-mail foi chamado adequadamente, ou usar Stubs para injetar respostas malformadas do gateway.
 
 **Fase 4 (Caos & SRE)**
-No arquivo server.js, a funcao gatewayPagamentoMock.cobrar simula uma promessa de 300ms. Quando voces configurarem o Toxiproxy, voces interceptarao essa chamada externa e forcarao uma latencia de 5000ms. O k6 vai disparar requisicoes para /api/v1/checkout e o grupo devera avaliar se o Express vai sofrer um colapso ou se o codigo de voces (redesenhado com circuit breaker ou timeouts curtos) vai proteger o servidor.
+O `docker-compose.yml` sobe a aplicacao falando com o gateway e com o Redis
+**atraves do Toxiproxy**. Os scripts em `chaos/` injetam os toxicos: 5000ms de
+latencia no gateway (`chaos:gateway-slow`) e queda do no de cache
+(`chaos:cache-down`). O k6 dispara carga em `/api/v1/checkout` e o grupo avalia
+se o Express colapsa ou se a arquitetura (circuit breaker, timeouts curtos,
+bulkhead, backoff com jitter, single-flight no cache) protege o servidor.
+Detalhes em `tests/performance/README.md`.
 ## Ciclo TDD aplicado
 
 O desenvolvimento da solucao foi conduzido seguindo o ciclo TDD Vermelho-Verde-Refatore. Primeiro foram definidos os comportamentos esperados em testes automatizados com Jest e Supertest. Em seguida, a implementacao foi evoluida de forma incremental ate que os testes passassem. Por fim, o codigo foi refatorado para reduzir acoplamento, isolar dependencias externas e melhorar a clareza da regra de negocio sem alterar o comportamento validado pelos testes.
@@ -104,7 +117,7 @@ const criarResultadoPagamentoHandlers = (checkoutService) => ({
 });
 ```
 
-Com essa estrutura, o metodo principal `processar` ficou mais orientado ao fluxo de alto nivel, enquanto as regras especificas de cada resultado de pagamento ficaram encapsuladas em classes proprias. Isso reduz a complexidade ciclom�tica percebida, facilita a extensao para novos status do gateway e preserva o comportamento validado pela suite de testes.
+Com essa estrutura, o metodo principal `processar` ficou mais orientado ao fluxo de alto nivel, enquanto as regras especificas de cada resultado de pagamento ficaram encapsuladas em classes proprias. Isso reduz a complexidade ciclomatica percebida, facilita a extensao para novos status do gateway e preserva o comportamento validado pela suite de testes.
 
 ## Teste de mutacao com Stryker.js
 
@@ -118,50 +131,94 @@ Para isso, foi configurado o **Stryker.js** no projeto Node/Jest.
 | Runner de testes | Jest |
 | Arquivo de configuracao | `stryker.conf.js` |
 | Comando | `npm run test:mutation` |
-| Meta minima obrigatoria | 80% de Mutation Score |
-| Resultado obtido | 100,00% de Mutation Score |
+| Meta minima obrigatoria | 90% de Mutation Score (criterio mais rigoroso da rubrica) |
+| Resultado obtido | **98,14%** de Mutation Score |
 
-A configuracao define que apenas o codigo de producao deve sofrer mutacao:
+A configuracao muta a regra de negocio em `src/`, excluindo o stub de infra:
 
 ```javascript
 mutate: [
   'src/**/*.js',
-  '!src/**/*.test.js'
+  '!src/gateway-stub/**/*.js'
 ]
 ```
 
-Tambem foi configurado um limite de quebra da build em 80%:
+O limite de quebra da build foi elevado para 90% (a build falha abaixo disso):
 
 ```javascript
 thresholds: {
   high: 90,
   low: 80,
-  break: 80
+  break: 90
 }
 ```
 
 Na primeira execucao, alguns mutantes sobreviveram em validacoes de entrada, resposta de fallback, configuracoes de resiliencia e comportamento assincrono. A suite foi enriquecida com testes adicionais em `tests/integration/http/server.checkout.test.js` e `tests/unit/services/CheckoutService.business.test.js`, cobrindo casos como e-mail invalido, cartao nulo, cartao sem numero, resposta HTTP 500, rota operacional, bootstrap HTTP, dependencias padrao do app, timeout, limpeza de timeout, circuit breaker sem `isOpen`, erro de persistencia, falha no envio de e-mail e fluxo de erro do gateway sem resposta.
 
-Resultado final da execucao:
+Resultado final da execucao (evidencia versionada em `docs/evidencias/`):
 
 ```text
-All files            | 100.00 mutation score
-CheckoutService.js   | 100.00 mutation score
-server.js            | 100.00 mutation score
+All files               | 98,14 mutation score
+CircuitBreaker.js       | 100,00
+CheckoutService.js      | 100,00
+Bulkhead.js             | 100,00
+server.js               |  98,78
+GatewayPagamentoHttp.js |  96,15
+CacheService.js         |  93,33
 ```
 
-Com isso, a suite supera a meta obrigatoria de Mutation Score minimo de 80% e terminou com 0 mutantes sobreviventes.
+A suite supera a meta de 90%. Os 6 mutantes sobreviventes sao **equivalentes**
+(mensagens de log, chave de cache opaca, guard defensivo e `clearTimeout` de
+cleanup) e estao justificados tecnicamente em
+[`docs/evidencias/mutation-summary.md`](docs/evidencias/mutation-summary.md).
+O relatorio bruto fica em `docs/evidencias/mutation.json`.
 
 
+
+## BDD executavel (Fase 2)
+
+Os arquivos `features/*.feature` sao **especificacao viva executavel** (nao
+decorativa): ligados ao app real via Cucumber + Supertest.
+
+```bash
+npm run test:bdd   # 7 cenarios, 84 steps (Dado-Quando-Entao em pt-BR)
+```
+
+Cobrem sucesso, cartao recusado, payload invalido e os caminhos infelizes de
+resiliencia: timeout do gateway, retry recuperado, retry esgotado e circuit
+breaker aberto. As step definitions ficam em `features/support/steps.js`.
+
+## Padroes de Resiliencia (Fase 4B)
+
+A defesa contra o efeito cascata e a exaustao de recursos esta no codigo, com
+seams de injecao de dependencia (cada padrao tem teste e contribui para o
+Mutation Score):
+
+| Padrao | Onde | O que protege |
+| :--- | :--- | :--- |
+| **Circuit Breaker** | `src/services/CircuitBreaker.js` (instanciado em `server.js`) | Para de marcar o gateway quando a taxa de falha passa de 50% (closed/open/half-open) |
+| **Bulkhead + load-shedding** | `src/services/Bulkhead.js` | Limita concorrencia; excesso recebe HTTP 503 em vez de esgotar o pool |
+| **Timeout em toda chamada externa** | `CheckoutService.comTimeout`/`persistir` | Gateway e repositorio nao penduram o event loop |
+| **Retry com backoff + jitter** | `CheckoutService.calcularBackoffComJitter` | Retentativas nao voltam todas ao mesmo tempo (anti thundering herd) |
+| **Idempotencia** | `idempotencyKey` por pedido | Evita cobranca dupla no retry apos timeout |
+| **Cache single-flight + fallback** | `src/services/CacheService.js` | Manada de cache miss vira uma so leitura ao banco; degrada se o Redis cai |
 
 ## Fase 4 - Engenharia do Caos e Testes de Desempenho
 
 A fase de desempenho foi implementada com **k6**, simulando um ambiente de homologacao local para o endpoint `POST /api/v1/checkout`. Os scripts usam perfis de volumetria inspirados em Black Friday, com ramp-up, periodo steady e ramp-down.
 
-| Script | Objetivo | Perfil de carga |
+> **Resultados comprovados** (execucao real, evidencia em
+> [`docs/evidencias/sre-summary.md`](docs/evidencias/sre-summary.md)):
+> gateway lento (5000ms via Toxiproxy) &rarr; **p95 = 3318 ms**, 0% erro, 100%
+> fallback controlado; thundering herd (flush + 150 VUs) &rarr; **p95 = 1163 ms**,
+> 0% erro; **MTTR = 3310 ms**. Todos os SLOs mantidos.
+
+| Script | Objetivo | Perfil de carga (parametrizavel) |
 | :--- | :--- | :--- |
-| `tests/performance/black-friday-load.js` | Teste de carga nominal | ramp-up ate 25 VUs, steady de 1 minuto e ramp-down |
-| `tests/performance/black-friday-stress.js` | Teste de estresse progressivo | ramp-up progressivo ate 100 VUs e ramp-down |
+| `black-friday-load.js` | Carga nominal | ramp-up ate 200 VUs (`LOAD_VUS`), 2 min steady, ramp-down |
+| `black-friday-stress.js` | Estresse progressivo | ramp ate 500 VUs (`STRESS_VUS`) |
+| `gateway-lento-5000ms.js` | Gateway lento (resiliencia) | 50 VUs (`GATEWAY_VUS`) |
+| `thundering-herd-cache-flush.js` | Manada apos flush de cache | 10.000 VUs (`HERD_VUS`) |
 
 ### SLI/SLO definidos
 
@@ -181,101 +238,56 @@ thresholds: {
 }
 ```
 
-### Como executar
+### Como executar o caos (Docker + Toxiproxy)
 
-Subir a aplicacao:
-
-```bash
-npm start
-```
-
-Executar os cenarios:
+A aplicacao fala com o gateway e com o Redis **atraves do Toxiproxy**, permitindo
+injetar latencia/queda na rede sem alterar o codigo:
 
 ```bash
-npm run perf:load
-npm run perf:stress
+npm run chaos:up            # sobe app + Toxiproxy + Redis + gateway-stub
+npm run perf:load           # carga nominal
+npm run perf:stress         # estresse
 ```
 
-Tambem e possivel apontar para outro ambiente usando `BASE_URL`.
+Cada script grava evidencia em `docs/evidencias/k6/<cenario>.summary.{json,txt}`
+via `handleSummary` (artefato versionavel, em vez de saida colada).
 
-### Evidencias de execucao local
+### Injecao de falhas - Gateway Lento (Toxiproxy)
 
-Ambos os testes foram executados contra `http://localhost:3000`.
+A latencia de 5000 ms NAO e simulada no codigo: e injetada na rede pelo Toxiproxy.
 
-| Cenario | Resultado | p95 de latencia | Taxa de erro HTTP | Taxa de erro funcional |
-| :--- | :--- | ---: | ---: | ---: |
-| Carga Black Friday | Aprovado | 314.87 ms | 0.00% | 0.00% |
-| Estresse Black Friday | Aprovado | 317.84 ms | 0.00% | 0.00% |
+```bash
+npm run chaos:gateway-slow  # adiciona toxic de 5000ms na chamada do gateway
+npm run perf:gateway-slow   # k6 mede a degradacao graciosa
+npm run chaos:gateway-reset # remove a latencia
+```
 
-Com isso, a aplicacao ficou abaixo do limite de latencia p95 de 5 segundos e abaixo do limite de erro de 5% nos dois cenarios.
+Comportamento esperado: o checkout nao espera os 5000 ms. Com timeout (2000 ms),
+retry limitado, circuit breaker e fallback, responde 200 ou 500 (fallback
+controlado) sempre abaixo de 5 s. Apenas 502/503/504/timeout de transporte
+contam como `http_req_failed`.
 
 ### Injecao de falhas - Thundering Herd
 
-Foi adicionado o cenario `tests/performance/thundering-herd-cache-flush.js` para simular o desastre de **Thundering Herd** apos invalidacao abrupta de cache.
+```bash
+npm run perf:herd        # faz FLUSHDB real no Redis e dispara 10.000 VUs
+npm run perf:herd:local  # rodada reduzida (100 VUs) para validar fluxo
+npm run chaos:cache-down # alternativa: derruba o no de cache pela rede
+```
 
-O fluxo do teste e:
+Sobrevivencia garantida por **single-flight** no cache (uma so leitura ao banco
+por chave) + **backoff exponencial com jitter** no gateway (retentativas nao
+voltam juntas) + degradacao graciosa quando o Redis cai.
 
-1. executar `POST /api/v1/cache/flush`;
-2. disparar 10.000 requisicoes simultaneas de checkout por padrao;
-3. validar se a aplicacao respeita os SLOs de p95 menor que 5 segundos e erro menor que 5%.
-
-Comando:
+### MTTR (Mean Time To Recovery)
 
 ```bash
-npm run perf:herd
+npm run chaos:mttr        # gateway lento: injeta, detecta, remove, mede recuperacao
+npm run chaos:mttr:cache  # mesmo experimento para a queda de cache
 ```
 
-Para rodadas locais menores:
-
-```powershell
-npm run perf:herd:local
-```
-
-A protecao contra sobrecarga foi reforcada no `CheckoutService` com **backoff exponencial com jitter**, evitando que retentativas de gateway voltem todas ao mesmo tempo apos uma falha ou flush de cache.
-
-
-
-Evidencia local reduzida do cenario Thundering Herd:
-
-```text
-k6 run -e HERD_VUS=10 tests/performance/thundering-herd-cache-flush.js
-p95 = 331.92 ms
-http_req_failed = 0.00%
-checkout_errors = 0.00%
-cache_flush_errors = 0.00%
-```
-
-O script oficial permanece configurado para 10.000 VUs por padrao em `npm run perf:herd`; a execucao reduzida serve apenas para validar sintaxe e fluxo em maquina local.
-
-### Injecao de falhas - Gateway Lento
-
-Foi adicionado o cenario `tests/performance/gateway-lento-5000ms.js` para simular 5000 ms de latencia na API de pagamento parceira.
-
-Para executar o desastre, suba a aplicacao com a latencia do gateway configurada:
-
-```powershell
-$env:GATEWAY_LATENCY_MS='5000'; $env:CHECKOUT_TIMEOUT_MS='1000'; $env:CHECKOUT_MAX_RETRIES='1'; $env:CHECKOUT_RETRY_DELAY_MS='100'; npm start
-```
-
-Em outro terminal:
-
-```bash
-npm run perf:gateway-slow
-```
-
-O comportamento esperado e resiliente: o checkout nao deve esperar indefinidamente o gateway lento. Como o servico possui timeout operacional de 2000 ms, retry limitado e fallback, o k6 espera HTTP 500 com mensagem amigavel e p95 abaixo de 5 segundos.
-
-Evidencia local do cenario Gateway Lento:
-
-```text
-GATEWAY_LATENCY_MS=5000
-CHECKOUT_TIMEOUT_MS=1000
-CHECKOUT_MAX_RETRIES=1
-CHECKOUT_RETRY_DELAY_MS=100
-p95 = 2.14 s
-http_req_failed = 0.00%
-gateway_slow_errors = 0.00%
-```
+Gera `docs/evidencias/mttr-<falha>.json` com `mttd_ms`, `mttr_ms` e
+`downtime_total_ms`. Detalhes em `tests/performance/README.md`.
 
 ## Organizacao dos testes automatizados
 

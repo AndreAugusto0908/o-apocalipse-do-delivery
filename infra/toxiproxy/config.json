@@ -1,0 +1,14 @@
+[
+  {
+    "name": "gateway",
+    "listen": "0.0.0.0:8666",
+    "upstream": "gateway-stub:9000",
+    "enabled": true
+  },
+  {
+    "name": "redis",
+    "listen": "0.0.0.0:6669",
+    "upstream": "redis:6379",
+    "enabled": true
+  }
+]

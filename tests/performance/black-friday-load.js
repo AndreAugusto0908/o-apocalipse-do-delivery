@@ -1,8 +1,10 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Rate } from 'k6/metrics';
+import { gerarHandleSummary } from './lib/summary.js';
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:3000';
+const LOAD_VUS = Number(__ENV.LOAD_VUS || 200);
 const checkoutErrors = new Rate('checkout_errors');
 
 export const options = {
@@ -10,8 +12,8 @@ export const options = {
     black_friday_checkout_load: {
       executor: 'ramping-vus',
       stages: [
-        { duration: '30s', target: 25 },
-        { duration: '1m', target: 25 },
+        { duration: '30s', target: LOAD_VUS },
+        { duration: '2m', target: LOAD_VUS },
         { duration: '30s', target: 0 }
       ],
       gracefulRampDown: '10s'
@@ -49,3 +51,5 @@ export default function () {
   checkoutErrors.add(!ok);
   sleep(1);
 }
+
+export const handleSummary = gerarHandleSummary('black-friday-load');
