@@ -10,6 +10,7 @@ Tuning de SRE aplicado (fail-fast para sobreviver dentro do SLO): timeout 1500 m
 
 | Cenario | Toxico injetado | p95 | Erro HTTP | Resultado |
 | :--- | :--- | ---: | ---: | :--- |
+| Carga nominal | nenhum (80 VUs sustentados) | **53 ms** | 0% | baseline saudavel |
 | Gateway Lento | **5000 ms de latencia via Toxiproxy** no gateway | **3321 ms** | 0% | SLO mantido (fallback 500 controlado, nunca espera os 5 s) |
 | Thundering Herd | flush de cache + 300 checkouts simultaneos | **2100 ms** | 0% | SLO mantido (single-flight + backoff com jitter) |
 
