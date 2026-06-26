@@ -1,8 +1,8 @@
 {
-  "p95_ms": 3321.5,
-  "p99_ms": 3368.77,
-  "avg_ms": 199.62,
-  "max_ms": 3391.68,
+  "p95_ms": 3318.44,
+  "p99_ms": 3363.57,
+  "avg_ms": 198.15,
+  "max_ms": 3378.51,
   "http_req_failed_rate": 0,
   "checks_rate": 1,
   "gateway_slow_errors": 0,

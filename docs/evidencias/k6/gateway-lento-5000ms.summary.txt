@@ -1,7 +1,7 @@
 === Cenario k6: gateway-lento-5000ms ===
-p95 latencia:        3321.5 ms (SLO < 5000 ms)
-p99 latencia:        3368.77 ms
-latencia media:      199.62 ms
+p95 latencia:        3318.44 ms (SLO < 5000 ms)
+p99 latencia:        3363.57 ms
+latencia media:      198.15 ms
 http_req_failed:     0 (SLO < 0.05)
 checks aprovados:    1
 gateway_slow_errors: 0

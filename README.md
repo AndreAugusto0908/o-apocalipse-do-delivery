@@ -209,9 +209,9 @@ A fase de desempenho foi implementada com **k6**, simulando um ambiente de homol
 
 > **Resultados comprovados** (execucao real, evidencia em
 > [`docs/evidencias/sre-summary.md`](docs/evidencias/sre-summary.md)):
-> gateway lento (5000ms via Toxiproxy) &rarr; **p95 = 3321 ms**, 0% erro, 100%
-> fallback controlado; thundering herd (flush + 300 VUs) &rarr; **p95 = 2100 ms**,
-> 0% erro; **MTTR = 3290 ms**. Todos os SLOs mantidos.
+> gateway lento (5000ms via Toxiproxy) &rarr; **p95 = 3318 ms**, 0% erro, 100%
+> fallback controlado; thundering herd (flush + 150 VUs) &rarr; **p95 = 1163 ms**,
+> 0% erro; **MTTR = 3310 ms**. Todos os SLOs mantidos.
 
 | Script | Objetivo | Perfil de carga (parametrizavel) |
 | :--- | :--- | :--- |
