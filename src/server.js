@@ -1,5 +1,6 @@
 const express = require('express');
 const { CheckoutService } = require('./services/CheckoutService');
+const { CircuitBreaker } = require('./services/CircuitBreaker');
 
 const obterNumeroAmbiente = (nome, valorPadrao) => {
   const valor = Number(process.env[nome]);
@@ -29,11 +30,22 @@ const criarEmailServiceMock = () => ({
   enviarConfirmacao: async (email) => console.log(`E-mail enviado para ${email}`)
 });
 
+const obterOpcoesCircuitBreakerAmbiente = () => ({
+  minimumRequests: obterNumeroAmbiente('CHECKOUT_CB_MIN_REQUESTS', 20),
+  threshold: obterNumeroAmbiente('CHECKOUT_CB_THRESHOLD', 0.5),
+  resetTimeoutMs: obterNumeroAmbiente('CHECKOUT_CB_RESET_MS', 10000)
+});
+
+const criarCircuitBreakerPadrao = () => new CircuitBreaker(obterOpcoesCircuitBreakerAmbiente());
+
 const criarCheckoutServicePadrao = () => new CheckoutService({
   gatewayPagamento: criarGatewayPagamentoMock(),
   pedidoRepository: criarPedidoRepositoryMock(),
   emailService: criarEmailServiceMock()
-}, obterOpcoesCheckoutAmbiente());
+}, {
+  ...obterOpcoesCheckoutAmbiente(),
+  circuitBreaker: criarCircuitBreakerPadrao()
+});
 
 const cartaoValido = (cartao) => (
   cartao
@@ -126,7 +138,10 @@ module.exports = {
   cartaoValido,
   obterLatenciaGatewayMs,
   obterOpcoesCheckoutAmbiente,
-  criarGatewayPagamentoMock
+  obterOpcoesCircuitBreakerAmbiente,
+  criarGatewayPagamentoMock,
+  criarCheckoutServicePadrao,
+  criarCircuitBreakerPadrao
 };
 
 

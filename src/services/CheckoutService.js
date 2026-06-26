@@ -48,11 +48,14 @@ class CheckoutService {
 
     for (let tentativa = 1; tentativa <= totalTentativas; tentativa += 1) {
       try {
-        return await this.comTimeout(
+        const resposta = await this.comTimeout(
           this.gatewayPagamento.cobrar(pedido.valor, pedido.cartao)
         );
+        this.circuitBreaker?.registrarSucesso?.();
+        return resposta;
       } catch (error) {
         console.error('Falha no gateway de pagamento:', error.message);
+        this.circuitBreaker?.registrarFalha?.();
 
         if (tentativa === totalTentativas) {
           return null;
