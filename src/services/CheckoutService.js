@@ -50,7 +50,7 @@ class CheckoutService {
     for (let tentativa = 1; tentativa <= totalTentativas; tentativa += 1) {
       try {
         const resposta = await this.comTimeout(
-          this.gatewayPagamento.cobrar(pedido.valor, pedido.cartao)
+          this.gatewayPagamento.cobrar(pedido.valor, pedido.cartao, pedido.idempotencyKey)
         );
         this.circuitBreaker?.registrarSucesso?.();
         return resposta;

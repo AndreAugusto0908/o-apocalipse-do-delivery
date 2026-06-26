@@ -1,4 +1,5 @@
 const express = require('express');
+const { randomUUID } = require('crypto');
 const { CheckoutService } = require('./services/CheckoutService');
 const { CircuitBreaker } = require('./services/CircuitBreaker');
 const { Bulkhead, BulkheadCheioError } = require('./services/Bulkhead');
@@ -17,11 +18,29 @@ const obterOpcoesCheckoutAmbiente = () => ({
   retryDelayMs: obterNumeroAmbiente('CHECKOUT_RETRY_DELAY_MS', 500)
 });
 
-const criarGatewayPagamentoMock = ({ latencyMs = obterLatenciaGatewayMs() } = {}) => ({
-  cobrar: async () => new Promise((resolve) => {
-    setTimeout(() => resolve({ status: 'APROVADO' }), latencyMs);
-  })
-});
+const criarGatewayPagamentoMock = ({ latencyMs = obterLatenciaGatewayMs() } = {}) => {
+  const processadas = new Map();
+  const gateway = {
+    cobrancasRealizadas: 0,
+    cobrar: (valor, cartao, idempotencyKey) => new Promise((resolve) => {
+      setTimeout(() => {
+        if (idempotencyKey && processadas.has(idempotencyKey)) {
+          resolve(processadas.get(idempotencyKey));
+          return;
+        }
+
+        const resultado = { status: 'APROVADO' };
+        if (idempotencyKey) {
+          processadas.set(idempotencyKey, resultado);
+        }
+        gateway.cobrancasRealizadas += 1;
+        resolve(resultado);
+      }, latencyMs);
+    })
+  };
+
+  return gateway;
+};
 
 const criarPedidoRepositoryMock = () => ({
   salvar: async (pedido) => ({ ...pedido, id: Math.floor(Math.random() * 10000) })
@@ -75,7 +94,8 @@ const criarPedidoCheckout = ({ clienteEmail, valor, cartao }) => ({
   clienteEmail,
   valor,
   cartao,
-  status: 'PENDENTE'
+  status: 'PENDENTE',
+  idempotencyKey: randomUUID()
 });
 
 const checkoutProcessado = (resultado) => resultado?.status === 'PROCESSADO';
@@ -158,6 +178,7 @@ module.exports = {
   startServer,
   pedidoValido,
   cartaoValido,
+  criarPedidoCheckout,
   obterLatenciaGatewayMs,
   obterOpcoesCheckoutAmbiente,
   obterOpcoesCircuitBreakerAmbiente,
