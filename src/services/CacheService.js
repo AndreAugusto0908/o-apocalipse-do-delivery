@@ -93,4 +93,28 @@ class CacheService {
   }
 }
 
-module.exports = { CacheService, InMemoryCacheStore };
+class RedisCacheStore {
+  constructor({ client }) {
+    this.client = client;
+  }
+
+  async get(chave) {
+    const bruto = await this.client.get(chave);
+
+    if (bruto === null || bruto === undefined) {
+      return null;
+    }
+
+    return JSON.parse(bruto);
+  }
+
+  async set(chave, valor, ttlMs) {
+    await this.client.set(chave, JSON.stringify(valor), { PX: ttlMs });
+  }
+
+  async flush() {
+    await this.client.flushDb();
+  }
+}
+
+module.exports = { CacheService, InMemoryCacheStore, RedisCacheStore };

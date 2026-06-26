@@ -3,7 +3,8 @@ const { randomUUID } = require('crypto');
 const { CheckoutService } = require('./services/CheckoutService');
 const { CircuitBreaker } = require('./services/CircuitBreaker');
 const { Bulkhead, BulkheadCheioError } = require('./services/Bulkhead');
-const { CacheService, InMemoryCacheStore } = require('./services/CacheService');
+const { CacheService, InMemoryCacheStore, RedisCacheStore } = require('./services/CacheService');
+const { GatewayPagamentoHttp } = require('./services/GatewayPagamentoHttp');
 
 const obterNumeroAmbiente = (nome, valorPadrao) => {
   const valor = Number(process.env[nome]);
@@ -18,6 +19,18 @@ const obterOpcoesCheckoutAmbiente = () => ({
   maxRetries: obterNumeroAmbiente('CHECKOUT_MAX_RETRIES', 3),
   retryDelayMs: obterNumeroAmbiente('CHECKOUT_RETRY_DELAY_MS', 500)
 });
+
+// Seleciona o gateway por ambiente: HTTP (interceptavel por Toxiproxy) quando
+// GATEWAY_URL esta definido; caso contrario, o mock em processo (testes/local).
+const criarGatewayPagamentoPadrao = () => {
+  const url = process.env.GATEWAY_URL;
+
+  if (url) {
+    return new GatewayPagamentoHttp({ baseUrl: url });
+  }
+
+  return criarGatewayPagamentoMock();
+};
 
 const criarGatewayPagamentoMock = ({ latencyMs = obterLatenciaGatewayMs() } = {}) => {
   const processadas = new Map();
@@ -75,13 +88,31 @@ const carregarCatalogoDoBanco = () => new Promise((resolve) => {
   setTimeout(() => resolve({ loja: 'EntregasJa', aberta: true }), obterLatenciaCatalogoMs());
 });
 
+// Seleciona o store do cache por ambiente: Redis (no docker-compose) quando
+// REDIS_URL esta definido; caso contrario, in-memory (testes/local).
+const criarCacheStorePadrao = () => {
+  const url = process.env.REDIS_URL;
+
+  if (!url) {
+    return new InMemoryCacheStore();
+  }
+
+  // require tardio: o pacote 'redis' so e necessario em homologacao/producao.
+  const { createClient } = require('redis');
+  const client = createClient({ url });
+  client.on('error', (erro) => console.error('Redis indisponivel:', erro.message));
+  client.connect().catch((erro) => console.error('Falha ao conectar no Redis:', erro.message));
+
+  return new RedisCacheStore({ client });
+};
+
 const criarCacheServicePadrao = () => new CacheService({
-  store: new InMemoryCacheStore(),
+  store: criarCacheStorePadrao(),
   ttlMs: obterNumeroAmbiente('CATALOGO_CACHE_TTL_MS', 30000)
 });
 
 const criarCheckoutServicePadrao = () => new CheckoutService({
-  gatewayPagamento: criarGatewayPagamentoMock(),
+  gatewayPagamento: criarGatewayPagamentoPadrao(),
   pedidoRepository: criarPedidoRepositoryMock(),
   emailService: criarEmailServiceMock()
 }, {
