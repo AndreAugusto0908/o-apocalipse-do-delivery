@@ -207,6 +207,12 @@ Mutation Score):
 
 A fase de desempenho foi implementada com **k6**, simulando um ambiente de homologacao local para o endpoint `POST /api/v1/checkout`. Os scripts usam perfis de volumetria inspirados em Black Friday, com ramp-up, periodo steady e ramp-down.
 
+> **Resultados comprovados** (execucao real, evidencia em
+> [`docs/evidencias/sre-summary.md`](docs/evidencias/sre-summary.md)):
+> gateway lento (5000ms via Toxiproxy) &rarr; **p95 = 3321 ms**, 0% erro, 100%
+> fallback controlado; thundering herd (flush + 300 VUs) &rarr; **p95 = 2100 ms**,
+> 0% erro; **MTTR = 3290 ms**. Todos os SLOs mantidos.
+
 | Script | Objetivo | Perfil de carga (parametrizavel) |
 | :--- | :--- | :--- |
 | `black-friday-load.js` | Carga nominal | ramp-up ate 200 VUs (`LOAD_VUS`), 2 min steady, ramp-down |
